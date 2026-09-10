@@ -43,6 +43,10 @@ type IncomingRequest struct {
 // know that VerifyAsymmetric happens to return its own error on mismatch.
 var ErrSignatureMismatch = errors.New("snap: signature mismatch")
 
+// ErrNoKeyStore is returned when a ServerVerifier is used with a nil
+// KeyStore, instead of panicking on the first lookup.
+var ErrNoKeyStore = errors.New("snap: verify: KeyStore is not set")
+
 // ServerVerifier verifies incoming SNAP requests on the Penyedia Layanan
 // (server) side — the inverse of the client-side signing in HeaderBuilder
 // and TokenManager.
@@ -94,6 +98,9 @@ func (v *ServerVerifier) checkFreshness(timestamp string) error {
 // signature. Access-token requests are always asymmetric, regardless of
 // v.Mode, matching TokenManager which always signs them asymmetrically.
 func (v *ServerVerifier) VerifyAccessTokenRequest(req IncomingRequest) error {
+	if v.KeyStore == nil {
+		return ErrNoKeyStore
+	}
 	if err := v.checkFreshness(req.Timestamp); err != nil {
 		return err
 	}
@@ -113,6 +120,9 @@ func (v *ServerVerifier) VerifyAccessTokenRequest(req IncomingRequest) error {
 // does not by itself make the request valid — the signature check always
 // runs and is what determines pass/fail.
 func (v *ServerVerifier) VerifyTransactionRequest(req IncomingRequest) error {
+	if v.KeyStore == nil {
+		return ErrNoKeyStore
+	}
 	if err := v.checkFreshness(req.Timestamp); err != nil {
 		return err
 	}

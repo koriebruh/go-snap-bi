@@ -245,6 +245,22 @@ func TestServerVerifier_KeyStoreLookupFailureIsNotSwallowed(t *testing.T) {
 	})
 }
 
+// TestServerVerifier_NilKeyStoreDoesNotPanic is the regression test for a
+// GAN evaluator finding: a zero-value ServerVerifier{} (no KeyStore set)
+// used to panic with a nil pointer dereference on the first lookup instead
+// of returning a clean error, inconsistent with the nil-guards already
+// present for Profile/Now on the same struct.
+func TestServerVerifier_NilKeyStoreDoesNotPanic(t *testing.T) {
+	v := &ServerVerifier{}
+
+	if err := v.VerifyAccessTokenRequest(validAccessTokenRequest()); !errors.Is(err, ErrNoKeyStore) {
+		t.Errorf("VerifyAccessTokenRequest() with nil KeyStore: err = %v, want errors.Is(err, ErrNoKeyStore)", err)
+	}
+	if err := v.VerifyTransactionRequest(validTransactionRequest(t, true)); !errors.Is(err, ErrNoKeyStore) {
+		t.Errorf("VerifyTransactionRequest() with nil KeyStore: err = %v, want errors.Is(err, ErrNoKeyStore)", err)
+	}
+}
+
 func TestServerVerifier_TimestampFreshness(t *testing.T) {
 	store := newVerifyTestStore()
 	fixedNow, err := time.Parse(DefaultTimestampLayout, verifyTestTime)
