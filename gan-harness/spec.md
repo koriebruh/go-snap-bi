@@ -104,8 +104,11 @@ Implement, in package `snap` (builds on Slice 1's `DefaultTimestampLayout`,
   - `Authorization: Bearer <token>` for transaction requests (both B2B and
     B2B2C).
   - `ORIGIN` — optional, include only if a non-empty origin is supplied.
-  - B2B2C only, when supplied: `Authorization-Customer`, `X-IP-ADDRESS`,
-    `X-DEVICE-ID`, `X-LATITUDE`, `X-LATITUDE`, `X-LONGITUDE`.
+  - B2B2C only, **mandatory**: `Authorization-Customer`, `X-DEVICE-ID` —
+    return an error if either is empty on a B2B2C request, per the
+    standard (§2.1.6.b), rather than omitting them.
+  - B2B2C only, genuinely optional (omitted when empty): `X-IP-ADDRESS`,
+    `X-LATITUDE`, `X-LONGITUDE`.
   Do not hardcode which signing function to call — accept a `symmetric bool`
   parameter (or equivalent) matching `BuildStringToSignTransaction`'s own
   parameter, and the corresponding secret/signer.
