@@ -146,7 +146,142 @@ Implement, in package `snap` (builds on Slice 1's `DefaultTimestampLayout`,
   sentinel for each HTTP class, and that the raw code string is still
   recoverable from the error message (via `%w` wrapping, not swallowed).
 
+## DONE: Slice 2 — Header assembly + response codes
+
+Implemented, GAN-evaluated (9.00/10), code/security reviewed and fixed on
+branch `feat/phase1-core` (commits `13e15ea`, `ad0036d`, `1b7f9ab`,
+`6af2f4a`). Kept above for reference only — do not re-implement.
+
+## CURRENT SLICE: Slice 3 — Transport, Envelope, TokenManager
+
+Implement, in package `snap` (builds on Slice 1's signing functions and
+Slice 2's `HeaderBuilder`/`Profile`):
+
+- `Envelope` struct:
+  ```go
+  type Envelope struct {
+      ResponseCode    string
+      ResponseMessage string
+      Raw             json.RawMessage
+  }
+  ```
+  `Raw` holds the full decoded response body so a caller can unmarshal it
+  into a service-specific type in a later phase; Phase 1 has no
+  per-service types yet.
+
+- `Transport` struct + `Do` method:
+  ```go
+  type Transport struct {
+      HTTPClient *http.Client // optional; nil means a client with a sane default timeout (e.g. 30s)
+  }
+
+  func (t *Transport) Do(ctx context.Context, hb HeaderBuilder) (Envelope, error)
+  ```
+  Reuses Slice 2's `HeaderBuilder` directly instead of inventing a parallel
+  request type — `hb.EndpointURL` is already the full URL, `hb.Method` the
+  HTTP verb, `hb.Body` the exact wire bytes. `Do` calls `hb.Build()` to get
+  the signed headers (propagating its error unchanged), builds an
+  `*http.Request` via `http.NewRequestWithContext(ctx, hb.Method,
+  hb.EndpointURL, bytes.NewReader(hb.Body))`, copies the built headers onto
+  it, executes it via `HTTPClient` (or the default), reads and closes the
+  response body, and unmarshals it into `Envelope` — `responseCode` and
+  `responseMessage` extracted into their named fields, the whole decoded
+  body also kept as `Raw`. A non-2xx HTTP status is not itself a Go `error`
+  from `Do` — the caller inspects `Envelope.ResponseCode` via
+  `ResponseCodeError` (Slice 2) to decide; only transport-level failures
+  (network error, non-JSON body, context cancellation) are returned as
+  `error`.
+
+- `GrantType` + `Token`:
+  ```go
+  type GrantType string
+
+  const (
+      GrantTypeClientCredentials GrantType = "client_credentials"
+      GrantTypeAuthorizationCode GrantType = "AUTHORIZATION_CODE"
+      GrantTypeRefreshToken      GrantType = "REFRESH_TOKEN"
+  )
+
+  type Token struct {
+      AccessToken  string
+      TokenType    string
+      ExpiresIn    time.Duration
+      RefreshToken string // set for B2B2C only
+  }
+  ```
+
+- `TokenManager` struct + methods:
+  ```go
+  type TokenManager struct {
+      BaseURL    string        // e.g. "https://openapi.example.com"
+      ClientKey  string
+      Signer     crypto.Signer // access-token requests are always asymmetric-signed, both B2B and B2B2C
+      HTTPClient *http.Client  // optional; nil means a sane default
+      Profile    Profile       // optional; nil means DefaultProfile{}
+      Now        func() time.Time // optional; nil means time.Now, injectable for deterministic tests
+
+      // unexported: cached B2B token + expiry + sync.Mutex
+  }
+
+  func (m *TokenManager) AccessTokenB2B(ctx context.Context) (string, error)
+  func (m *TokenManager) AccessTokenB2B2C(ctx context.Context, grantType GrantType, code string) (Token, error)
+  ```
+  - Access-token requests use a different, simpler header set than
+    transaction requests (no `X-PARTNER-ID`/`X-EXTERNAL-ID`/`CHANNEL-ID`):
+    `Content-Type`, `X-TIMESTAMP`, `X-CLIENT-KEY`, `X-SIGNATURE`. Do not
+    route this through `HeaderBuilder` (which is shaped for transaction
+    requests) — build this smaller header set directly.
+  - `stringToSign` for the access-token request is
+    `BuildStringToSignAccessToken(clientKey, timestamp)` (Slice 1), always
+    signed via `SignAsymmetric` (Slice 1) — never `SignSymmetric`, per the
+    standard, regardless of what signing mode is used for transaction
+    requests.
+  - `AccessTokenB2B`: POSTs `{"grantType":"client_credentials"}` to
+    `BaseURL + Profile.BuildPath("access-token", "b2b")`. On success, parses
+    `accessToken`, `tokenType`, `expiresIn` (seconds, per the standard's
+    `"900"` example) from the response body, caches the token keyed by
+    nothing else (one `TokenManager` = one client credential = one cached
+    token), and computes an internal expiry as `m.now() + expiresIn -
+    safetyMargin` where `safetyMargin` is a small fixed constant (e.g. 30s)
+    — not the raw `expiresIn` treated as exact. A call before that computed
+    expiry returns the cached token with zero HTTP calls; a call at or past
+    it re-fetches. Guarded by a mutex for concurrent callers.
+  - `AccessTokenB2B2C`: POSTs `{"grantType":<grantType>,"authCode":<code>}`
+    (when `grantType == GrantTypeAuthorizationCode`) or
+    `{"grantType":<grantType>,"refreshToken":<code>}` (when
+    `grantType == GrantTypeRefreshToken`) to `BaseURL +
+    Profile.BuildPath("access-token", "b2b2c")`. Parses `accessToken`,
+    `tokenType`, `expiresIn`, `refreshToken` from the response and returns
+    a `Token` — no caching (per-end-user; the caller owns session scoping,
+    per the design doc).
+  - A non-nil `responseCode`/`responseMessage` error response (per Slice
+    2's `ParseResponseCode`/`ResponseCodeError`) is surfaced as the
+    returned `error`, not silently ignored.
+
+### Required tests (table-driven, stdlib `testing`)
+
+- `Transport.Do`: using `httptest.Server`, a test that returns a JSON body
+  with `responseCode`/`responseMessage`/extra fields, asserting `Envelope`
+  correctly extracts the named fields and preserves the rest in `Raw`
+  (unmarshal `Raw` into a small anonymous struct in the test to confirm).
+  Also a test asserting the request the server actually received carries
+  the signed headers from `HeaderBuilder` (e.g. check `X-Signature` is
+  non-empty and `X-Timestamp` is present in what the test server recorded).
+- `TokenManager.AccessTokenB2B`: using `httptest.Server` with an injectable
+  `Now`, a test proving (a) the first call hits the server and caches the
+  result, (b) a second call before the computed expiry does NOT hit the
+  server again (assert on a request counter), (c) advancing the injected
+  clock past the computed expiry causes a third call to hit the server
+  again. Also a test asserting the request signature was computed via
+  `SignAsymmetric`/`BuildStringToSignAccessToken`, not the symmetric path.
+- `TokenManager.AccessTokenB2B2C`: using `httptest.Server`, one test per
+  grant type (`GrantTypeAuthorizationCode`, `GrantTypeRefreshToken`)
+  asserting the correct body field (`authCode` vs `refreshToken`) is sent,
+  and the returned `Token` (including `RefreshToken`) is parsed correctly.
+- Both `TokenManager` methods: a test where the mock server returns a
+  non-2xx `responseCode` (e.g. `"401xxxx"`-shaped per Slice 2), asserting
+  a non-nil `error` is returned rather than a "successful" empty token.
+
 ## Later slices (not in scope for this GAN loop — do not implement now)
 
-- Slice 3: `Transport`, `Envelope`, `TokenManager` (B2B + B2B2C).
 - Slice 4: `KeyStore`, `ServerVerifier`.
