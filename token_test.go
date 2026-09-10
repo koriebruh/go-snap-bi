@@ -37,6 +37,54 @@ func (c *fakeClock) Advance(d time.Duration) {
 	c.now = c.now.Add(d)
 }
 
+func TestParseExpiresIn(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"typical value", "900", 900 * time.Second, false},
+		{"empty", "", 0, true},
+		{"not a number", "soon", 0, true},
+		{"zero rejected", "0", 0, true},
+		{"negative rejected", "-5", 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseExpiresIn(tt.raw)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseExpiresIn(%q) error = %v, wantErr %v", tt.raw, err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("parseExpiresIn(%q) = %v, want %v", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCacheTTL(t *testing.T) {
+	tests := []struct {
+		name      string
+		expiresIn time.Duration
+		want      time.Duration
+	}{
+		{"typical: margin fits comfortably", 900 * time.Second, 900*time.Second - tokenSafetyMargin},
+		{"small expiresIn: margin clamped to half", 40 * time.Second, 20 * time.Second},
+		{"expiresIn equal to margin: clamped to half, not zero/negative", tokenSafetyMargin, tokenSafetyMargin / 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cacheTTL(tt.expiresIn); got != tt.want {
+				t.Errorf("cacheTTL(%v) = %v, want %v", tt.expiresIn, got, tt.want)
+			}
+			if got := cacheTTL(tt.expiresIn); got <= 0 {
+				t.Errorf("cacheTTL(%v) = %v, must stay positive so caching isn't defeated", tt.expiresIn, got)
+			}
+		})
+	}
+}
+
 func TestTokenManager_AccessTokenB2B_CachesAndRefetchesAfterExpiry(t *testing.T) {
 	var reqCount atomic.Int64
 
@@ -304,6 +352,77 @@ func TestTokenManager_AccessTokenB2B_WaiterCtxCancelDoesNotBlock(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("waiter did not return promptly after its ctx was cancelled — mutex/fetch is blocking it")
+	}
+}
+
+// TestTokenManager_AccessTokenB2B_InitiatorCtxCancelDoesNotPoisonWaiters is
+// the regression test for the code/security review finding that the shared
+// single-flight fetch used to run on the ctx of whichever caller happened to
+// start it — so if that caller's own ctx was cancelled, every other waiter
+// received that same spurious error instead of the token the server was
+// still perfectly willing to provide. The fetch must now run on its own
+// detached context, unaffected by any individual caller (initiator or
+// waiter) giving up.
+func TestTokenManager_AccessTokenB2B_InitiatorCtxCancelDoesNotPoisonWaiters(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"accessToken":"tok1","tokenType":"Bearer","expiresIn":"900"}`)
+	}))
+	defer server.Close()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	m := &TokenManager{BaseURL: server.URL, ClientKey: "client-key", Signer: key}
+
+	// Initiator: its ctx will be cancelled while the fetch is still running.
+	initiatorCtx, cancelInitiator := context.WithCancel(context.Background())
+	initiatorDone := make(chan error, 1)
+	go func() {
+		_, err := m.AccessTokenB2B(initiatorCtx)
+		initiatorDone <- err
+	}()
+	time.Sleep(20 * time.Millisecond) // let the initiator start the fetch
+
+	// Waiter: healthy ctx, should get the real token once the server responds.
+	waiterDone := make(chan struct {
+		token string
+		err   error
+	}, 1)
+	go func() {
+		tok, err := m.AccessTokenB2B(context.Background())
+		waiterDone <- struct {
+			token string
+			err   error
+		}{tok, err}
+	}()
+	time.Sleep(20 * time.Millisecond) // let the waiter join the same fetch
+
+	cancelInitiator()
+	select {
+	case err := <-initiatorDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("initiator AccessTokenB2B() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("initiator did not return promptly after its own ctx was cancelled")
+	}
+
+	close(release) // let the server (and thus the shared fetch) finish
+
+	select {
+	case res := <-waiterDone:
+		if res.err != nil {
+			t.Errorf("waiter AccessTokenB2B() error = %v, want nil (must not inherit initiator's cancellation)", res.err)
+		}
+		if res.token != "tok1" {
+			t.Errorf("waiter AccessTokenB2B() token = %q, want %q", res.token, "tok1")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiter never received the fetch result")
 	}
 }
 

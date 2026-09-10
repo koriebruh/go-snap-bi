@@ -189,7 +189,23 @@ func parseExpiresIn(raw string) (time.Duration, error) {
 	if err != nil {
 		return 0, fmt.Errorf("snap: token manager: parse expiresIn: %w", err)
 	}
+	if seconds <= 0 {
+		return 0, fmt.Errorf("snap: token manager: expiresIn must be positive, got %d", seconds)
+	}
 	return time.Duration(seconds) * time.Second, nil
+}
+
+// cacheTTL returns the duration a token fetched with the given expiresIn
+// should be cached for: expiresIn minus tokenSafetyMargin, but never less
+// than half of expiresIn — so a small or unusual expiresIn value can't make
+// the safety margin swallow the entire cache window and defeat caching
+// (every call refetching against what is typically a rate-limited endpoint).
+func cacheTTL(expiresIn time.Duration) time.Duration {
+	margin := tokenSafetyMargin
+	if half := expiresIn / 2; margin > half {
+		margin = half
+	}
+	return expiresIn - margin
 }
 
 // AccessTokenB2B returns a cached client_credentials access token, fetching
@@ -197,57 +213,89 @@ func parseExpiresIn(raw string) (time.Duration, error) {
 // its computed expiry. Guarded by a mutex so concurrent callers share one
 // in-flight fetch's result rather than each firing a request.
 func (m *TokenManager) AccessTokenB2B(ctx context.Context) (string, error) {
+	fetch := m.b2bFetch()
+	select {
+	case <-fetch.done:
+		return fetch.token, fetch.err
+	case <-ctx.Done():
+		// This caller's own ctx expired; the shared fetch (running on its
+		// own detached context) is unaffected and other waiters are
+		// unaffected by this caller giving up.
+		return "", ctx.Err()
+	}
+}
+
+// b2bFetch returns a tokenFetch representing either the already-cached
+// token (as an already-closed fetch), the currently in-flight refresh, or a
+// newly-started one. The actual HTTP call runs on its own goroutine with a
+// context detached from any individual caller, so no single caller's
+// cancellation can poison the result every other concurrent caller receives.
+func (m *TokenManager) b2bFetch() *tokenFetch {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.cachedToken != "" && m.now().Before(m.expiresAt) {
-		token := m.cachedToken
-		m.mu.Unlock()
-		return token, nil
+		done := make(chan struct{})
+		close(done)
+		return &tokenFetch{done: done, token: m.cachedToken}
 	}
-	if fetch := m.inFlight; fetch != nil {
-		// Another goroutine is already refreshing; wait for its result
-		// instead of issuing a duplicate request. A cancelled ctx unblocks
-		// this caller immediately without affecting the shared fetch or any
-		// other waiter.
-		m.mu.Unlock()
-		select {
-		case <-fetch.done:
-			return fetch.token, fetch.err
-		case <-ctx.Done():
-			return "", ctx.Err()
-		}
+	if m.inFlight != nil {
+		return m.inFlight
 	}
+
 	fetch := &tokenFetch{done: make(chan struct{})}
 	m.inFlight = fetch
-	m.mu.Unlock()
+	go m.runB2BFetch(fetch)
+	return fetch
+}
 
-	// The HTTP call itself happens without holding the lock, so a slow or
-	// hung token endpoint doesn't block cache-hit callers or force every
-	// waiter to share this fetch's ctx.
+// runB2BFetch performs the actual access-token HTTP request and publishes
+// its result to fetch, always closing fetch.done exactly once — including
+// when a caller-supplied hook (Profile, Signer, HTTPClient) panics, so a
+// single bad implementation can't permanently wedge every future
+// AccessTokenB2B call waiting on a fetch that never completes.
+func (m *TokenManager) runB2BFetch(fetch *tokenFetch) {
+	var (
+		token     string
+		err       error
+		expiresIn time.Duration
+	)
 	now := m.now()
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("snap: token manager: panic during token fetch: %v", r)
+		}
+		m.mu.Lock()
+		if err == nil {
+			m.cachedToken = token
+			m.expiresAt = now.Add(cacheTTL(expiresIn))
+		}
+		m.inFlight = nil
+		m.mu.Unlock()
+
+		fetch.token, fetch.err = token, err
+		close(fetch.done)
+	}()
+
+	// Detached from any individual caller's ctx (so one caller's
+	// cancellation can't fail this shared fetch out from under every other
+	// waiter), but still bounded so a hung endpoint doesn't leak this
+	// goroutine forever.
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), defaultHTTPTimeout)
+	defer cancel()
+
 	timestamp := now.Format(m.profile().TimestampLayout())
 	body := []byte(`{"grantType":"client_credentials"}`)
-	parsed, err := m.doAccessTokenRequest(ctx, m.profile().BuildPath("access-token", "b2b"), body, timestamp)
-
-	var token string
-	var expiresIn time.Duration
-	if err == nil {
-		expiresIn, err = parseExpiresIn(parsed.ExpiresIn)
-		if err == nil {
-			token = parsed.AccessToken
-		}
+	parsed, ferr := m.doAccessTokenRequest(fetchCtx, m.profile().BuildPath("access-token", "b2b"), body, timestamp)
+	if ferr != nil {
+		err = ferr
+		return
 	}
-
-	m.mu.Lock()
-	if err == nil {
-		m.cachedToken = token
-		m.expiresAt = now.Add(expiresIn - tokenSafetyMargin)
+	expiresIn, err = parseExpiresIn(parsed.ExpiresIn)
+	if err != nil {
+		return
 	}
-	m.inFlight = nil
-	m.mu.Unlock()
-
-	fetch.token, fetch.err = token, err
-	close(fetch.done)
-	return token, err
+	token = parsed.AccessToken
 }
 
 // AccessTokenB2B2C exchanges an authorization code or refresh token for a

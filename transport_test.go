@@ -119,7 +119,7 @@ func TestTransportDo_SendsSignedHeaders(t *testing.T) {
 func TestTransportDo_PropagatesHeaderBuildErrorUnchanged(t *testing.T) {
 	hb := HeaderBuilder{
 		Method:      http.MethodPost,
-		EndpointURL: "http://example.invalid/service/endpoint",
+		EndpointURL: "https://example.invalid/service/endpoint",
 		// ExternalID intentionally left empty: HeaderBuilder.Build must
 		// reject this before any request is sent, and Do must return that
 		// exact error rather than wrapping it.
