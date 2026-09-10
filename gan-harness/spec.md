@@ -282,6 +282,112 @@ Slice 2's `HeaderBuilder`/`Profile`):
   non-2xx `responseCode` (e.g. `"401xxxx"`-shaped per Slice 2), asserting
   a non-nil `error` is returned rather than a "successful" empty token.
 
+## DONE: Slice 3 — Transport, Envelope, TokenManager
+
+Implemented, GAN-evaluated (8.5/10), code/security reviewed across two
+rounds and fixed on branch `feat/phase1-core` (commits `8748748`, `d92d734`,
+`76e69d3`). Kept above for reference only — do not re-implement.
+
+## CURRENT SLICE: Slice 4 — KeyStore, ServerVerifier (final Phase 1 slice)
+
+Implement, in package `snap` (builds on Slice 1's verify functions and
+Slice 2's response-code helpers; this is the "Penyedia Layanan verifies an
+incoming request" side, the inverse of Slice 3's client-side signing):
+
+- `KeyStore` interface — caller-implemented, since key/secret storage is an
+  application concern (DB, vault, etc.), not something this package owns:
+  ```go
+  type KeyStore interface {
+      PublicKey(clientKey string) (crypto.PublicKey, error)
+      ClientSecret(clientKey string) (string, error)
+  }
+  ```
+
+- `SignatureMode` — the transaction-level signing mode agreed with a
+  partner at registration time (per the standard's own wording; this is
+  config, not a per-request runtime choice):
+  ```go
+  type SignatureMode int
+
+  const (
+      SignatureModeSymmetric SignatureMode = iota // default zero value
+      SignatureModeAsymmetric
+  )
+  ```
+
+- `IncomingRequest` — the fields a `ServerVerifier` needs, extracted by the
+  caller from whatever HTTP framework they use (this package doesn't parse
+  `*http.Request` itself, to stay framework-agnostic):
+  ```go
+  type IncomingRequest struct {
+      Method      string // HTTP method, e.g. "POST"
+      EndpointURL string // full endpoint URL exactly as used in the signing formula
+      Body        []byte // exact request body bytes as received
+      Timestamp   string // X-TIMESTAMP header value
+      ClientKey   string // X-CLIENT-KEY header value
+      Signature   string // X-SIGNATURE header value
+      AccessToken string // Authorization header's token, without the "Bearer " prefix; required for symmetric transaction verification, ignored otherwise
+  }
+  ```
+
+- `ServerVerifier`:
+  ```go
+  type ServerVerifier struct {
+      KeyStore        KeyStore
+      Mode            SignatureMode    // transaction-level mode; access-token requests are always asymmetric regardless of this
+      TimestampWindow time.Duration    // freshness tolerance; zero means no freshness check (explicit opt-in, not hardcoded)
+      Profile         Profile          // optional; nil means DefaultProfile{}, used only for TimestampLayout when parsing Timestamp
+      Now             func() time.Time // optional; nil means time.Now, injectable for tests
+  }
+
+  func (v *ServerVerifier) VerifyAccessTokenRequest(req IncomingRequest) error
+  func (v *ServerVerifier) VerifyTransactionRequest(req IncomingRequest) error
+  ```
+  - Both methods first check timestamp freshness when `TimestampWindow > 0`:
+    parse `req.Timestamp` using `v.profile().TimestampLayout()` (falling
+    back to `DefaultTimestampLayout` via `DefaultProfile{}`), return an
+    error if it fails to parse or if `|now - parsedTime| > TimestampWindow`.
+  - `VerifyAccessTokenRequest`: always asymmetric, regardless of `Mode`
+    (matches Slice 3's `TokenManager`, which always signs access-token
+    requests asymmetrically). Looks up the public key via
+    `KeyStore.PublicKey(req.ClientKey)`, builds
+    `BuildStringToSignAccessToken(req.ClientKey, req.Timestamp)` (Slice 1),
+    verifies via `VerifyAsymmetric` (Slice 1). A `KeyStore` lookup failure
+    is returned as-is (wrapped with context), not swallowed.
+  - `VerifyTransactionRequest`: builds
+    `BuildStringToSignTransaction(req.Method, req.EndpointURL,
+    req.AccessToken, req.Body, req.Timestamp, v.Mode ==
+    SignatureModeSymmetric)` (Slice 1). If `v.Mode == SignatureModeSymmetric`,
+    looks up the secret via `KeyStore.ClientSecret(req.ClientKey)` and
+    verifies via `VerifySymmetric` (Slice 1), converting its `bool` return
+    into an error (e.g. a new `ErrSignatureMismatch` sentinel) rather than
+    silently returning `false`. If `v.Mode == SignatureModeAsymmetric`,
+    looks up the public key via `KeyStore.PublicKey` and verifies via
+    `VerifyAsymmetric`.
+  - Neither method interprets a request as valid just because a `KeyStore`
+    lookup succeeded — the signature check itself is always performed and
+    is what determines pass/fail.
+
+### Required tests (table-driven, stdlib `testing`)
+
+- Round-trip: use Slice 1's `SignSymmetric`/`SignAsymmetric` to construct a
+  correctly-signed `IncomingRequest` (both an access-token-shaped one and a
+  transaction-shaped one, in both `SignatureMode`s), verify it succeeds via
+  `ServerVerifier` with a fake in-memory `KeyStore`. Then tamper one field
+  at a time (signature, body, timestamp, client key pointing at a
+  different key/secret) and assert verification fails for each.
+- `KeyStore` lookup failure (unknown `clientKey`): assert the error is
+  returned, not swallowed into a generic "verification failed", and that no
+  panic occurs.
+- Timestamp freshness: a request signed with a timestamp far outside
+  `TimestampWindow` fails even with an otherwise-correct signature; a
+  request within the window succeeds; `TimestampWindow == 0` accepts a
+  wildly-old timestamp (documents the explicit opt-out).
+- `VerifyAccessTokenRequest` ignores `Mode` entirely — a table test with
+  both `SignatureModeSymmetric` and `SignatureModeAsymmetric` set on the
+  same `ServerVerifier`, both correctly verifying an asymmetrically-signed
+  access-token request, proves `Mode` has no effect on this method.
+
 ## Later slices (not in scope for this GAN loop — do not implement now)
 
-- Slice 4: `KeyStore`, `ServerVerifier`.
+(none — Slice 4 is the last slice of Phase 1)
