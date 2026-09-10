@@ -1,4 +1,8 @@
-# GAN Eval Rubric — go-snap-bi Slice 1 (Signing core)
+# GAN Eval Rubric — go-snap-bi (applies to every Phase 1 slice)
+
+Dimensions and scoring rules below are generic across slices. Always check
+the CURRENT SLICE section of `gan-harness/spec.md` for what's actually being
+scored in a given run.
 
 Score each run 0-10 per dimension. Passing bar: all dimensions >= 8, no
 dimension below 6. Evaluator runs `go build ./...` and `go test ./... -v

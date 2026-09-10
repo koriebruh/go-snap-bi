@@ -1,6 +1,7 @@
 package snap
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
@@ -9,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -18,6 +20,19 @@ import (
 // the implementation under test so a broken implementation can't
 // tautologically agree with itself.
 const sha256HexOfEmptyBody = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+// tamperHex flips the last hex character of a signature to a value
+// guaranteed different from the original, so tamper tests can't
+// accidentally no-op (e.g. sig[:len(sig)-1]+"0" is a no-op whenever the
+// original last character already was "0").
+func tamperHex(sig string) string {
+	last := sig[len(sig)-1]
+	replacement := byte('0')
+	if last == '0' {
+		replacement = '1'
+	}
+	return sig[:len(sig)-1] + string(replacement)
+}
 
 var testRSAKeys = sync.OnceValue(func() [2]*rsa.PrivateKey {
 	k1, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -45,9 +60,15 @@ func TestSignVerifySymmetric(t *testing.T) {
 		want         bool
 	}{
 		{"correct signature verifies", secret, stringToSign, sig, true},
-		{"tampered signature fails", secret, stringToSign, sig[:len(sig)-1] + "0", false},
+		{"tampered signature fails", secret, stringToSign, tamperHex(sig), false},
 		{"tampered stringToSign fails", secret, stringToSign + "x", sig, false},
 		{"wrong secret fails", "other-secret", stringToSign, sig, false},
+		{"uppercase-hex signature still verifies", secret, stringToSign, strings.ToUpper(sig), true},
+		{"non-hex signature fails closed, not panics", secret, stringToSign, "not-hex!!", false},
+		{
+			"empty clientSecret rejected, not treated as a valid HMAC key",
+			"", stringToSign, SignSymmetric("", stringToSign), false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -56,6 +77,23 @@ func TestSignVerifySymmetric(t *testing.T) {
 				t.Errorf("VerifySymmetric() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSignSymmetricKnownAnswer checks SignSymmetric against a signature
+// value computed independently (Python stdlib hmac+hashlib), not by
+// round-tripping through this package's own functions — a round-trip-only
+// test can't detect a paired algorithm substitution (e.g. accidentally
+// switching to SHA-384 or base64 output) since it would still agree with
+// itself.
+func TestSignSymmetricKnownAnswer(t *testing.T) {
+	const secret = "s3cr3t"
+	const stringToSign = "POST:/v1.0/access-token/b2b:2026-09-10T10:00:00.000+07:00"
+	const wantHex = "40092593b7c6e6e5bf4a09ef346d831089fe3bb46efcdff1a91545e0f01eb064c5b2745b93b157389c39c64a8436c2e8bc07b0d9de723fb76c39c4b8c6c436ff"
+
+	got := SignSymmetric(secret, stringToSign)
+	if got != wantHex {
+		t.Errorf("SignSymmetric() = %q, want independently-computed %q", got, wantHex)
 	}
 }
 
@@ -91,7 +129,7 @@ func TestSignVerifyAsymmetric(t *testing.T) {
 		wantErr      bool
 	}{
 		{"correct signature verifies", &key.PublicKey, stringToSign, sig, false},
-		{"tampered signature fails", &key.PublicKey, stringToSign, sig[:len(sig)-2] + "00", true},
+		{"tampered signature fails", &key.PublicKey, stringToSign, tamperHex(sig), true},
 		{"tampered stringToSign fails", &key.PublicKey, stringToSign + "x", sig, true},
 		{"wrong key fails", &otherKey.PublicKey, stringToSign, sig, true},
 		{"non-hex signature fails", &key.PublicKey, stringToSign, "not-hex!!", true},
@@ -111,8 +149,86 @@ func TestVerifyAsymmetricRejectsNonRSAKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ed25519.GenerateKey() error = %v", err)
 	}
-	if err := VerifyAsymmetric(pub, "x", "00"); err == nil {
-		t.Error("VerifyAsymmetric() with non-RSA public key: want error, got nil")
+	if err := VerifyAsymmetric(pub, "x", "00"); !errors.Is(err, ErrNotRSASigner) {
+		t.Errorf("VerifyAsymmetric() with non-RSA public key: err = %v, want errors.Is(err, ErrNotRSASigner)", err)
+	}
+}
+
+func TestSignAsymmetricRejectsNonRSASigner(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("ed25519.GenerateKey() error = %v", err)
+	}
+	if _, err := SignAsymmetric(priv, "x"); !errors.Is(err, ErrNotRSASigner) {
+		t.Errorf("SignAsymmetric() with non-RSA signer: err = %v, want errors.Is(err, ErrNotRSASigner)", err)
+	}
+}
+
+func TestSignVerifyAsymmetricRejectWeakKey(t *testing.T) {
+	weakKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey(1024) error = %v", err)
+	}
+	if _, err := SignAsymmetric(weakKey, "x"); !errors.Is(err, ErrWeakRSAKey) {
+		t.Errorf("SignAsymmetric() with 1024-bit key: err = %v, want errors.Is(err, ErrWeakRSAKey)", err)
+	}
+
+	// A signature produced by a strong key must still be rejected on the
+	// verify side if the caller is (mis)configured to check against a weak
+	// public key — the floor applies independently on each side.
+	strongKey := testRSAKeys()[0]
+	sig, err := SignAsymmetric(strongKey, "x")
+	if err != nil {
+		t.Fatalf("SignAsymmetric() error = %v", err)
+	}
+	if err := VerifyAsymmetric(&weakKey.PublicKey, "x", sig); !errors.Is(err, ErrWeakRSAKey) {
+		t.Errorf("VerifyAsymmetric() with 1024-bit public key: err = %v, want errors.Is(err, ErrWeakRSAKey)", err)
+	}
+}
+
+// TestSignVerifyAsymmetricRejectsZeroValuePublicKey is the regression test
+// for a security review finding: a *rsa.PublicKey with a nil N field (e.g.
+// &rsa.PublicKey{} returned by a buggy KeyStore before it's populated)
+// panicked on rsaPub.N.BitLen() instead of failing closed with an error.
+func TestSignVerifyAsymmetricRejectsZeroValuePublicKey(t *testing.T) {
+	zeroPub := &rsa.PublicKey{}
+	if err := VerifyAsymmetric(zeroPub, "x", "00"); !errors.Is(err, ErrNotRSASigner) {
+		t.Errorf("VerifyAsymmetric() with zero-value public key: err = %v, want errors.Is(err, ErrNotRSASigner)", err)
+	}
+
+	zeroSigner := zeroValueSigner{}
+	if _, err := SignAsymmetric(zeroSigner, "x"); !errors.Is(err, ErrNotRSASigner) {
+		t.Errorf("SignAsymmetric() with a signer whose Public() returns a zero-value key: err = %v, want errors.Is(err, ErrNotRSASigner)", err)
+	}
+}
+
+// zeroValueSigner is a crypto.Signer whose Public() returns a *rsa.PublicKey
+// with a nil N — simulating a buggy caller-supplied Signer implementation,
+// for TestSignVerifyAsymmetricRejectsZeroValuePublicKey.
+type zeroValueSigner struct{}
+
+func (zeroValueSigner) Public() crypto.PublicKey { return &rsa.PublicKey{} }
+func (zeroValueSigner) Sign(io.Reader, []byte, crypto.SignerOpts) ([]byte, error) {
+	panic("not reached: rejected before Sign is called")
+}
+
+// TestSignAsymmetricIsDeterministic asserts SHA256withRSA (PKCS#1 v1.5)
+// signing produces identical output across repeated calls for the same
+// input. This is true for PKCS#1 v1.5 and false for RSA-PSS (which is
+// randomized) — a determinism regression here would mean the implementation
+// silently drifted to PSS, which a pure round-trip test cannot detect.
+func TestSignAsymmetricIsDeterministic(t *testing.T) {
+	key := testRSAKeys()[0]
+	sig1, err := SignAsymmetric(key, "deterministic check")
+	if err != nil {
+		t.Fatalf("SignAsymmetric() error = %v", err)
+	}
+	sig2, err := SignAsymmetric(key, "deterministic check")
+	if err != nil {
+		t.Fatalf("SignAsymmetric() error = %v", err)
+	}
+	if sig1 != sig2 {
+		t.Errorf("SignAsymmetric() not deterministic: %q != %q (expected for PKCS#1 v1.5; would legitimately differ under RSA-PSS)", sig1, sig2)
 	}
 }
 

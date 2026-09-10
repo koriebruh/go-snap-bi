@@ -25,6 +25,20 @@ var (
 	ErrNotRSAKey  = errors.New("snap: not an RSA key")
 )
 
+// Sentinel errors returned by SignAsymmetric and VerifyAsymmetric, wrapped
+// with %w so callers can distinguish failure modes via errors.Is.
+var (
+	ErrNotRSASigner = errors.New("snap: not an RSA signer")
+	ErrWeakRSAKey   = errors.New("snap: RSA key smaller than minimum size")
+)
+
+// minRSAKeyBits is the minimum RSA modulus size accepted for SHA256withRSA
+// signing and verification. The standard specifies 256-bit (i.e. 2048-bit
+// modulus) keys; this floor rejects weaker keys that would be practically
+// forgeable, most importantly on the verify side where the public key may
+// come from a partner-registered certificate.
+const minRSAKeyBits = 2048
+
 // SignSymmetric computes the HMAC-SHA512 signature of stringToSign using
 // clientSecret as the key, returning lowercase hex-encoded output.
 func SignSymmetric(clientSecret, stringToSign string) string {
@@ -37,8 +51,24 @@ func SignSymmetric(clientSecret, stringToSign string) string {
 // signature of stringToSign under clientSecret, using a constant-time
 // comparison.
 func VerifySymmetric(clientSecret, stringToSign, signature string) bool {
+	if clientSecret == "" {
+		// An empty key turns HMAC into a deterministic, publicly computable
+		// MAC — a KeyStore implementation mistake that returns "" for an
+		// unregistered client must not be treated as "verifies against the
+		// empty string," so this is rejected before ever reaching hmac.Equal.
+		return false
+	}
 	expected := SignSymmetric(clientSecret, stringToSign)
-	return hmac.Equal([]byte(expected), []byte(signature))
+	expectedBytes, err := hex.DecodeString(expected)
+	if err != nil {
+		// SignSymmetric always produces valid hex; unreachable in practice.
+		return false
+	}
+	gotBytes, err := hex.DecodeString(signature)
+	if err != nil {
+		return false
+	}
+	return hmac.Equal(expectedBytes, gotBytes)
 }
 
 // SignAsymmetric signs stringToSign with SHA256withRSA (PKCS#1 v1.5) using
@@ -46,6 +76,16 @@ func VerifySymmetric(clientSecret, stringToSign, signature string) bool {
 // rather than a concrete *rsa.PrivateKey so that HSM/KMS-backed keys can be
 // plugged in without an API change.
 func SignAsymmetric(signer crypto.Signer, stringToSign string) (string, error) {
+	if signer == nil {
+		return "", fmt.Errorf("snap: sign asymmetric: %w", ErrNotRSASigner)
+	}
+	rsaPub, ok := signer.Public().(*rsa.PublicKey)
+	if !ok || rsaPub == nil || rsaPub.N == nil {
+		return "", fmt.Errorf("snap: sign asymmetric: %w", ErrNotRSASigner)
+	}
+	if rsaPub.N.BitLen() < minRSAKeyBits {
+		return "", fmt.Errorf("snap: sign asymmetric: %w", ErrWeakRSAKey)
+	}
 	digest := sha256.Sum256([]byte(stringToSign))
 	sig, err := signer.Sign(rand.Reader, digest[:], crypto.SHA256)
 	if err != nil {
@@ -60,8 +100,11 @@ func SignAsymmetric(signer crypto.Signer, stringToSign string) (string, error) {
 // signature does not verify.
 func VerifyAsymmetric(pub crypto.PublicKey, stringToSign, signature string) error {
 	rsaPub, ok := pub.(*rsa.PublicKey)
-	if !ok {
-		return errors.New("snap: verify asymmetric: public key is not an RSA key")
+	if !ok || rsaPub == nil || rsaPub.N == nil {
+		return fmt.Errorf("snap: verify asymmetric: %w", ErrNotRSASigner)
+	}
+	if rsaPub.N.BitLen() < minRSAKeyBits {
+		return fmt.Errorf("snap: verify asymmetric: %w", ErrWeakRSAKey)
 	}
 	sig, err := hex.DecodeString(signature)
 	if err != nil {

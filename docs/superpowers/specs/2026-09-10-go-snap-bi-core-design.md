@@ -177,8 +177,11 @@ var DefaultProfile Profile // implements standard SNAP behavior exactly
 - `HeaderBuilder` assembles the mandatory header set per request type:
   `Content-Type`, `X-TIMESTAMP`, `X-CLIENT-KEY`, `X-SIGNATURE`,
   `X-PARTNER-ID`, `X-EXTERNAL-ID`, `CHANNEL-ID`, `ORIGIN`, plus
-  B2B2C-only fields (`Authorization-Customer`, `X-IP-ADDRESS`,
-  `X-DEVICE-ID`, `X-LATITUDE`, `X-LONGITUDE`) when applicable.
+  B2B2C-only fields: `Authorization-Customer` and `X-DEVICE-ID` are
+  **mandatory** for B2B2C per the standard (§2.1.6.b) — a build request
+  errors if either is missing, rather than silently omitting them.
+  `X-IP-ADDRESS`, `X-LATITUDE`, `X-LONGITUDE` are genuinely optional and
+  omitted when empty.
 - Timestamp formatting and URI path construction (§2.1.11:
   `/{domain}/{version}/{service-group}/{product-type}`) are delegated to
   `Profile`, so a bank-specific deviation is expressed as a small struct
