@@ -3,8 +3,17 @@ package snap
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"net/http"
 	"testing"
 )
+
+// headerAbsent reports whether k is genuinely not present in h, as opposed
+// to present with an empty value — h.Get(k) == "" can't tell those apart,
+// which would let a header wrongly set to "" pass an "omitted" assertion.
+func headerAbsent(h http.Header, k string) bool {
+	_, ok := h[http.CanonicalHeaderKey(k)]
+	return !ok
+}
 
 // fixedLayoutProfile overrides TimestampLayout to prove the Profile hook
 // actually takes effect on the built X-TIMESTAMP header.
@@ -55,14 +64,14 @@ func TestHeaderBuilder_Build_B2B(t *testing.T) {
 	if h.Get("X-Signature") == "" {
 		t.Error("X-SIGNATURE header is empty")
 	}
-	if h.Get("Origin") != "" {
-		t.Errorf("ORIGIN header = %q, want empty (not supplied)", h.Get("Origin"))
+	if !headerAbsent(h, "Origin") {
+		t.Errorf("ORIGIN header present = %q, want absent (not supplied)", h.Get("Origin"))
 	}
 
 	// B2B2C-only headers must be absent.
 	for _, k := range []string{"Authorization-Customer", "X-Ip-Address", "X-Device-Id", "X-Latitude", "X-Longitude"} {
-		if got := h.Get(k); got != "" {
-			t.Errorf("B2B request: header %q = %q, want absent", k, got)
+		if !headerAbsent(h, k) {
+			t.Errorf("B2B request: header %q present = %q, want absent", k, h.Get(k))
 		}
 	}
 
@@ -175,8 +184,8 @@ func TestHeaderBuilder_Build_B2B2C_OptionalFieldsOmittedWhenEmpty(t *testing.T) 
 	}
 
 	for _, k := range []string{"Authorization-Customer", "X-Ip-Address", "X-Device-Id", "X-Latitude", "X-Longitude", "Origin"} {
-		if got := h.Get(k); got != "" {
-			t.Errorf("header %q = %q, want absent when not supplied", k, got)
+		if !headerAbsent(h, k) {
+			t.Errorf("header %q present = %q, want absent when not supplied", k, h.Get(k))
 		}
 	}
 }
