@@ -18,6 +18,13 @@ import (
 // standard's yyyy-MM-ddTHH:mm:ss.SSSTZD timestamp format.
 const DefaultTimestampLayout = "2006-01-02T15:04:05.000-07:00"
 
+// Sentinel errors returned by ParseRSAPrivateKeyPEM, wrapped with %w so
+// callers can distinguish failure modes via errors.Is.
+var (
+	ErrNoPEMBlock = errors.New("snap: no PEM block found")
+	ErrNotRSAKey  = errors.New("snap: not an RSA key")
+)
+
 // SignSymmetric computes the HMAC-SHA512 signature of stringToSign using
 // clientSecret as the key, returning lowercase hex-encoded output.
 func SignSymmetric(clientSecret, stringToSign string) string {
@@ -95,7 +102,7 @@ func BuildStringToSignTransaction(method, endpointURL, accessToken string, body 
 func ParseRSAPrivateKeyPEM(pemBytes []byte) (crypto.Signer, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
-		return nil, errors.New("snap: parse rsa private key: no PEM block found")
+		return nil, fmt.Errorf("snap: parse rsa private key: %w", ErrNoPEMBlock)
 	}
 	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
 		return key, nil
@@ -106,7 +113,7 @@ func ParseRSAPrivateKeyPEM(pemBytes []byte) (crypto.Signer, error) {
 	}
 	rsaKey, ok := key.(*rsa.PrivateKey)
 	if !ok {
-		return nil, errors.New("snap: parse rsa private key: not an RSA key")
+		return nil, fmt.Errorf("snap: parse rsa private key: %w", ErrNotRSAKey)
 	}
 	return rsaKey, nil
 }

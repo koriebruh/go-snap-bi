@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -207,21 +208,24 @@ func TestParseRSAPrivateKeyPEM(t *testing.T) {
 	tests := []struct {
 		name    string
 		pemData []byte
-		wantErr bool
+		wantErr error // nil means "no error expected"
 	}{
-		{"valid PKCS#1 RSA key", pkcs1PEM, false},
-		{"valid PKCS#8 RSA key", pkcs8PEM, false},
-		{"malformed PEM", []byte("this is not a pem block"), true},
-		{"non-RSA key type", edPEM, true},
+		{"valid PKCS#1 RSA key", pkcs1PEM, nil},
+		{"valid PKCS#8 RSA key", pkcs8PEM, nil},
+		{"malformed PEM", []byte("this is not a pem block"), ErrNoPEMBlock},
+		{"non-RSA key type", edPEM, ErrNotRSAKey},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			signer, err := ParseRSAPrivateKeyPEM(tt.pemData)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ParseRSAPrivateKeyPEM() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr {
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("ParseRSAPrivateKeyPEM() error = %v, want errors.Is(err, %v)", err, tt.wantErr)
+				}
 				return
+			}
+			if err != nil {
+				t.Fatalf("ParseRSAPrivateKeyPEM() error = %v, want nil", err)
 			}
 			if signer == nil {
 				t.Fatal("ParseRSAPrivateKeyPEM() returned nil signer with nil error")
