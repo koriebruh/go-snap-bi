@@ -388,6 +388,18 @@ incoming request" side, the inverse of Slice 3's client-side signing):
   same `ServerVerifier`, both correctly verifying an asymmetrically-signed
   access-token request, proves `Mode` has no effect on this method.
 
-## Later slices (not in scope for this GAN loop — do not implement now)
+## DONE: Slice 4 — KeyStore, ServerVerifier (final Phase 1 slice)
 
-(none — Slice 4 is the last slice of Phase 1)
+Implemented, GAN-evaluated (9.17/10), code/security reviewed and fixed on
+branch `feat/phase1-core` (commits `7773403`, `7dd0f43`, `808d91a`) —
+including closing a CRITICAL empty-secret HMAC auth-bypass caught in
+security review, plus aligning `SignatureMode`'s zero value with
+`HeaderBuilder.Symmetric`'s and making `TimestampWindow` secure-by-default.
+
+## Phase 1 status: COMPLETE
+
+All four slices (signing core, header assembly + response codes, transport
++ token lifecycle, server-side verification) are implemented, evaluated, and
+reviewed on branch `feat/phase1-core`. Next step is opening a PR into `main`
+and merging, per the design doc's scope for this package's first shippable
+release.
