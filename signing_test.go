@@ -19,6 +19,19 @@ import (
 // tautologically agree with itself.
 const sha256HexOfEmptyBody = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
+// tamperHex flips the last hex character of a signature to a value
+// guaranteed different from the original, so tamper tests can't
+// accidentally no-op (e.g. sig[:len(sig)-1]+"0" is a no-op whenever the
+// original last character already was "0").
+func tamperHex(sig string) string {
+	last := sig[len(sig)-1]
+	replacement := byte('0')
+	if last == '0' {
+		replacement = '1'
+	}
+	return sig[:len(sig)-1] + string(replacement)
+}
+
 var testRSAKeys = sync.OnceValue(func() [2]*rsa.PrivateKey {
 	k1, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -45,7 +58,7 @@ func TestSignVerifySymmetric(t *testing.T) {
 		want         bool
 	}{
 		{"correct signature verifies", secret, stringToSign, sig, true},
-		{"tampered signature fails", secret, stringToSign, sig[:len(sig)-1] + "0", false},
+		{"tampered signature fails", secret, stringToSign, tamperHex(sig), false},
 		{"tampered stringToSign fails", secret, stringToSign + "x", sig, false},
 		{"wrong secret fails", "other-secret", stringToSign, sig, false},
 		{"uppercase-hex signature still verifies", secret, stringToSign, strings.ToUpper(sig), true},
@@ -110,7 +123,7 @@ func TestSignVerifyAsymmetric(t *testing.T) {
 		wantErr      bool
 	}{
 		{"correct signature verifies", &key.PublicKey, stringToSign, sig, false},
-		{"tampered signature fails", &key.PublicKey, stringToSign, sig[:len(sig)-2] + "00", true},
+		{"tampered signature fails", &key.PublicKey, stringToSign, tamperHex(sig), true},
 		{"tampered stringToSign fails", &key.PublicKey, stringToSign + "x", sig, true},
 		{"wrong key fails", &otherKey.PublicKey, stringToSign, sig, true},
 		{"non-hex signature fails", &key.PublicKey, stringToSign, "not-hex!!", true},

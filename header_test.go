@@ -163,19 +163,26 @@ func TestHeaderBuilder_Build_B2B2C(t *testing.T) {
 	}
 }
 
-func TestHeaderBuilder_Build_B2B2C_OptionalFieldsOmittedWhenEmpty(t *testing.T) {
+// TestHeaderBuilder_Build_B2B2C_GenuinelyOptionalFieldsOmittedWhenEmpty
+// covers only IPAddress/Latitude/Longitude/Origin, which the standard marks
+// optional. AuthorizationCustomer and X-DEVICE-ID are mandatory for B2B2C
+// per the standard (Pedoman Standar Teknis dan Keamanan SNAP, §2.1.6.b) and
+// are covered by the mandatory-field error tests below instead.
+func TestHeaderBuilder_Build_B2B2C_GenuinelyOptionalFieldsOmittedWhenEmpty(t *testing.T) {
 	b := HeaderBuilder{
-		Method:       "POST",
-		EndpointURL:  "https://openapi.example.com/v1.0/transfer-va",
-		Body:         []byte(`{}`),
-		B2B2C:        true, // B2B2C request, but none of the optional fields supplied
-		AccessToken:  "access-token-123",
-		ClientKey:    "client-key",
-		PartnerID:    "partner-id",
-		ExternalID:   "external-id",
-		ChannelID:    "channel-id",
-		Symmetric:    true,
-		ClientSecret: "shh-secret",
+		Method:                "POST",
+		EndpointURL:           "https://openapi.example.com/v1.0/transfer-va",
+		Body:                  []byte(`{}`),
+		B2B2C:                 true,
+		AccessToken:           "access-token-123",
+		AuthorizationCustomer: "customer-token-456", // mandatory, supplied
+		DeviceID:              "device-1",           // mandatory, supplied
+		ClientKey:             "client-key",
+		PartnerID:             "partner-id",
+		ExternalID:            "external-id",
+		ChannelID:             "channel-id",
+		Symmetric:             true,
+		ClientSecret:          "shh-secret",
 	}
 
 	h, err := b.Build()
@@ -183,9 +190,107 @@ func TestHeaderBuilder_Build_B2B2C_OptionalFieldsOmittedWhenEmpty(t *testing.T) 
 		t.Fatalf("Build() error = %v", err)
 	}
 
-	for _, k := range []string{"Authorization-Customer", "X-Ip-Address", "X-Device-Id", "X-Latitude", "X-Longitude", "Origin"} {
+	for _, k := range []string{"X-Ip-Address", "X-Latitude", "X-Longitude", "Origin"} {
 		if !headerAbsent(h, k) {
 			t.Errorf("header %q present = %q, want absent when not supplied", k, h.Get(k))
+		}
+	}
+}
+
+func TestHeaderBuilder_Build_MandatoryFieldErrors(t *testing.T) {
+	base := func() HeaderBuilder {
+		return HeaderBuilder{
+			Method:       "POST",
+			EndpointURL:  "https://openapi.example.com/v1.0/transfer-va",
+			Body:         []byte(`{}`),
+			AccessToken:  "access-token-123",
+			ClientKey:    "client-key",
+			PartnerID:    "partner-id",
+			ExternalID:   "external-id",
+			ChannelID:    "channel-id",
+			Symmetric:    true,
+			ClientSecret: "shh-secret",
+		}
+	}
+
+	t.Run("missing ExternalID", func(t *testing.T) {
+		b := base()
+		b.ExternalID = ""
+		if _, err := b.Build(); err == nil {
+			t.Error("Build() with empty ExternalID: want error, got nil")
+		}
+	})
+
+	t.Run("symmetric with empty ClientSecret", func(t *testing.T) {
+		b := base()
+		b.ClientSecret = ""
+		if _, err := b.Build(); err == nil {
+			t.Error("Build() with Symmetric=true and empty ClientSecret: want error, got nil")
+		}
+	})
+
+	t.Run("asymmetric with nil Signer", func(t *testing.T) {
+		b := base()
+		b.Symmetric = false
+		b.ClientSecret = ""
+		b.Signer = nil
+		if _, err := b.Build(); err == nil {
+			t.Error("Build() with Symmetric=false and nil Signer: want error, got nil")
+		}
+	})
+
+	t.Run("B2B2C missing AuthorizationCustomer", func(t *testing.T) {
+		b := base()
+		b.B2B2C = true
+		b.DeviceID = "device-1"
+		if _, err := b.Build(); err == nil {
+			t.Error("Build() with B2B2C=true and empty AuthorizationCustomer: want error, got nil")
+		}
+	})
+
+	t.Run("B2B2C missing DeviceID", func(t *testing.T) {
+		b := base()
+		b.B2B2C = true
+		b.AuthorizationCustomer = "customer-token-456"
+		if _, err := b.Build(); err == nil {
+			t.Error("Build() with B2B2C=true and empty DeviceID: want error, got nil")
+		}
+	})
+}
+
+// TestHeaderBuilder_Build_B2BDoesNotLeakB2B2CFields is a regression guard: a
+// B2B request (B2B2C: false) must never emit customer-scoped headers even if
+// the corresponding struct fields happen to be populated by the caller (e.g.
+// a reused config struct), since a future refactor moving one h.Set outside
+// the `if b.B2B2C` block would otherwise pass every other existing test.
+func TestHeaderBuilder_Build_B2BDoesNotLeakB2B2CFields(t *testing.T) {
+	b := HeaderBuilder{
+		Method:                "POST",
+		EndpointURL:           "https://openapi.example.com/v1.0/transfer-va",
+		Body:                  []byte(`{}`),
+		B2B2C:                 false,
+		AccessToken:           "access-token-123",
+		AuthorizationCustomer: "customer-token-456",
+		DeviceID:              "device-1",
+		IPAddress:             "10.0.0.1",
+		Latitude:              "-6.2",
+		Longitude:             "106.8",
+		ClientKey:             "client-key",
+		PartnerID:             "partner-id",
+		ExternalID:            "external-id",
+		ChannelID:             "channel-id",
+		Symmetric:             true,
+		ClientSecret:          "shh-secret",
+	}
+
+	h, err := b.Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	for _, k := range []string{"Authorization-Customer", "X-Device-Id", "X-Ip-Address", "X-Latitude", "X-Longitude"} {
+		if !headerAbsent(h, k) {
+			t.Errorf("B2B request: header %q present = %q, want absent even though the field was populated", k, h.Get(k))
 		}
 	}
 }

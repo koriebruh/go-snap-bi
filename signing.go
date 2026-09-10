@@ -69,6 +69,9 @@ func VerifySymmetric(clientSecret, stringToSign, signature string) bool {
 // rather than a concrete *rsa.PrivateKey so that HSM/KMS-backed keys can be
 // plugged in without an API change.
 func SignAsymmetric(signer crypto.Signer, stringToSign string) (string, error) {
+	if signer == nil {
+		return "", fmt.Errorf("snap: sign asymmetric: %w", ErrNotRSASigner)
+	}
 	rsaPub, ok := signer.Public().(*rsa.PublicKey)
 	if !ok {
 		return "", fmt.Errorf("snap: sign asymmetric: %w", ErrNotRSASigner)

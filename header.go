@@ -2,6 +2,7 @@ package snap
 
 import (
 	"crypto"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -18,7 +19,8 @@ type HeaderBuilder struct {
 	B2B2C       bool   // whether this is a B2B2C request
 
 	AccessToken           string // Authorization bearer token
-	AuthorizationCustomer string // Authorization-Customer bearer token (B2B2C only)
+	AuthorizationCustomer string // Authorization-Customer bearer token; mandatory when B2B2C is true
+	DeviceID              string // X-DEVICE-ID; mandatory when B2B2C is true
 
 	ClientKey  string
 	PartnerID  string
@@ -26,9 +28,8 @@ type HeaderBuilder struct {
 	ChannelID  string
 	Origin     string // optional; header omitted when empty
 
-	// B2B2C-only, optional; each header is omitted when its value is empty.
+	// B2B2C-only, genuinely optional; each header is omitted when empty.
 	IPAddress string
-	DeviceID  string
 	Latitude  string
 	Longitude string
 
@@ -43,6 +44,24 @@ type HeaderBuilder struct {
 // BuildStringToSignTransaction and SignSymmetric/SignAsymmetric per the
 // Symmetric flag.
 func (b HeaderBuilder) Build() (http.Header, error) {
+	if b.ExternalID == "" {
+		return nil, errors.New("snap: build headers: ExternalID is required")
+	}
+	if b.Symmetric && b.ClientSecret == "" {
+		return nil, errors.New("snap: build headers: symmetric signing requires ClientSecret")
+	}
+	if !b.Symmetric && b.Signer == nil {
+		return nil, errors.New("snap: build headers: asymmetric signing requires Signer")
+	}
+	if b.B2B2C {
+		if b.AuthorizationCustomer == "" {
+			return nil, errors.New("snap: build headers: B2B2C request requires AuthorizationCustomer")
+		}
+		if b.DeviceID == "" {
+			return nil, errors.New("snap: build headers: B2B2C request requires DeviceID")
+		}
+	}
+
 	profile := b.Profile
 	if profile == nil {
 		profile = DefaultProfile{}
@@ -77,14 +96,13 @@ func (b HeaderBuilder) Build() (http.Header, error) {
 	}
 
 	if b.B2B2C {
-		if b.AuthorizationCustomer != "" {
-			h.Set("Authorization-Customer", "Bearer "+b.AuthorizationCustomer)
-		}
+		// AuthorizationCustomer and DeviceID are validated non-empty above
+		// (mandatory per the standard); IPAddress/Latitude/Longitude are
+		// genuinely optional.
+		h.Set("Authorization-Customer", "Bearer "+b.AuthorizationCustomer)
+		h.Set("X-DEVICE-ID", b.DeviceID)
 		if b.IPAddress != "" {
 			h.Set("X-IP-ADDRESS", b.IPAddress)
-		}
-		if b.DeviceID != "" {
-			h.Set("X-DEVICE-ID", b.DeviceID)
 		}
 		if b.Latitude != "" {
 			h.Set("X-LATITUDE", b.Latitude)
