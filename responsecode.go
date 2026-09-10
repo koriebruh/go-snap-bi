@@ -60,25 +60,30 @@ func ResponseCodeError(code string) error {
 	if err != nil {
 		return err
 	}
+	return fmt.Errorf("%w: response code %s", sentinelForHTTPStatus(httpStatus), code)
+}
 
-	var sentinel error
+// sentinelForHTTPStatus maps an HTTP status to the sentinel error for its
+// class, shared between ResponseCodeError (which has a full 7-digit SNAP
+// responseCode) and callers that only have a raw HTTP status to go on (e.g.
+// a non-2xx response whose body doesn't carry a responseCode field at all).
+func sentinelForHTTPStatus(httpStatus int) error {
 	switch httpStatus {
 	case 400:
-		sentinel = ErrBadRequest
+		return ErrBadRequest
 	case 401:
-		sentinel = ErrUnauthorized
+		return ErrUnauthorized
 	case 403:
-		sentinel = ErrForbidden
+		return ErrForbidden
 	case 404:
-		sentinel = ErrNotFound
+		return ErrNotFound
 	case 500:
-		sentinel = ErrInternalServerError
+		return ErrInternalServerError
 	case 503:
-		sentinel = ErrServiceUnavailable
+		return ErrServiceUnavailable
 	case 504:
-		sentinel = ErrTimeout
+		return ErrTimeout
 	default:
-		sentinel = errUnmappedResponseCode
+		return errUnmappedResponseCode
 	}
-	return fmt.Errorf("%w: response code %s", sentinel, code)
 }

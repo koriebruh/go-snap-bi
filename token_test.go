@@ -156,10 +156,13 @@ func TestTokenManager_AccessTokenB2B_ConcurrentCallersShareOneFetch(t *testing.T
 }
 
 func TestTokenManager_AccessTokenB2B_SignsAsymmetricNeverSymmetric(t *testing.T) {
+	var mu sync.Mutex
 	var gotTimestamp, gotSignature string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		gotTimestamp = r.Header.Get("X-Timestamp")
 		gotSignature = r.Header.Get("X-Signature")
+		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"accessToken":"tok1","tokenType":"Bearer","expiresIn":"900"}`)
 	}))
@@ -179,6 +182,8 @@ func TestTokenManager_AccessTokenB2B_SignsAsymmetricNeverSymmetric(t *testing.T)
 	if _, err := m.AccessTokenB2B(context.Background()); err != nil {
 		t.Fatalf("AccessTokenB2B() error = %v", err)
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	if gotTimestamp == "" || gotSignature == "" {
 		t.Fatal("request missing X-Timestamp or X-Signature")
 	}
@@ -227,6 +232,78 @@ func TestTokenManager_AccessTokenB2B_ErrorResponseCode(t *testing.T) {
 				t.Errorf("AccessTokenB2B() error = %v, want errors.Is match against %v", err, tt.wantSentinel)
 			}
 		})
+	}
+}
+
+// TestTokenManager_AccessTokenB2B_NonTwoXXWithEmptyResponseCode covers the
+// case a well-formed responseCode is absent but the transport-level status
+// still signals failure (e.g. a proxy/WAF error page) — must not be treated
+// as success just because responseCode is empty.
+func TestTokenManager_AccessTokenB2B_NonTwoXXWithEmptyResponseCode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"message":"forbidden by upstream proxy"}`) // no responseCode field at all
+	}))
+	defer server.Close()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	m := &TokenManager{BaseURL: server.URL, ClientKey: "client-key", Signer: key}
+
+	tok, err := m.AccessTokenB2B(context.Background())
+	if err == nil {
+		t.Fatal("AccessTokenB2B() error = nil, want non-nil for a 401 status with no responseCode field")
+	}
+	if tok != "" {
+		t.Errorf("AccessTokenB2B() token = %q, want empty on error", tok)
+	}
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Errorf("AccessTokenB2B() error = %v, want errors.Is match against ErrUnauthorized", err)
+	}
+}
+
+// TestTokenManager_AccessTokenB2B_WaiterCtxCancelDoesNotBlock proves a
+// caller waiting on someone else's in-flight fetch returns as soon as its
+// own ctx is cancelled, rather than blocking for the full fetch duration.
+func TestTokenManager_AccessTokenB2B_WaiterCtxCancelDoesNotBlock(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release // held open until the test explicitly lets it finish
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"accessToken":"tok1","tokenType":"Bearer","expiresIn":"900"}`)
+	}))
+	defer server.Close()
+	defer close(release)
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	m := &TokenManager{BaseURL: server.URL, ClientKey: "client-key", Signer: key}
+
+	// Fetcher: starts the in-flight fetch, blocked on the server's <-release.
+	go func() { _, _ = m.AccessTokenB2B(context.Background()) }()
+	time.Sleep(20 * time.Millisecond) // let the fetcher acquire inFlight and reach the HTTP call
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := m.AccessTokenB2B(ctx)
+		done <- err
+	}()
+	time.Sleep(20 * time.Millisecond) // let the waiter reach the select
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("waiter AccessTokenB2B() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiter did not return promptly after its ctx was cancelled — mutex/fetch is blocking it")
 	}
 }
 

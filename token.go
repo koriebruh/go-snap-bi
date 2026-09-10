@@ -53,6 +53,18 @@ type TokenManager struct {
 	mu          sync.Mutex
 	cachedToken string
 	expiresAt   time.Time
+	inFlight    *tokenFetch
+}
+
+// tokenFetch represents one in-progress B2B token refresh. Concurrent
+// callers that arrive while a fetch is already running wait on done rather
+// than each issuing their own HTTP request, while still being able to
+// abandon the wait (returning their own ctx.Err()) without blocking on the
+// fetch itself.
+type tokenFetch struct {
+	done  chan struct{}
+	token string
+	err   error
 }
 
 func (m *TokenManager) now() time.Time {
@@ -153,6 +165,13 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: decode response body: %w", err)
 	}
+	if parsed.ResponseCode == "" && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
+		// The body didn't carry a responseCode (a differently-shaped error
+		// body, or a proxy/WAF error page) but the transport-level status
+		// still says this failed — fall back to a status-derived sentinel
+		// rather than treating an empty responseCode as success.
+		return accessTokenResponse{}, fmt.Errorf("%w: http status %d", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode)
+	}
 	if err := envelopeError(parsed.ResponseCode); err != nil {
 		return accessTokenResponse{}, err
 	}
@@ -179,27 +198,56 @@ func parseExpiresIn(raw string) (time.Duration, error) {
 // in-flight fetch's result rather than each firing a request.
 func (m *TokenManager) AccessTokenB2B(ctx context.Context) (string, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	now := m.now()
-	if m.cachedToken != "" && now.Before(m.expiresAt) {
-		return m.cachedToken, nil
+	if m.cachedToken != "" && m.now().Before(m.expiresAt) {
+		token := m.cachedToken
+		m.mu.Unlock()
+		return token, nil
 	}
+	if fetch := m.inFlight; fetch != nil {
+		// Another goroutine is already refreshing; wait for its result
+		// instead of issuing a duplicate request. A cancelled ctx unblocks
+		// this caller immediately without affecting the shared fetch or any
+		// other waiter.
+		m.mu.Unlock()
+		select {
+		case <-fetch.done:
+			return fetch.token, fetch.err
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	fetch := &tokenFetch{done: make(chan struct{})}
+	m.inFlight = fetch
+	m.mu.Unlock()
 
+	// The HTTP call itself happens without holding the lock, so a slow or
+	// hung token endpoint doesn't block cache-hit callers or force every
+	// waiter to share this fetch's ctx.
+	now := m.now()
 	timestamp := now.Format(m.profile().TimestampLayout())
 	body := []byte(`{"grantType":"client_credentials"}`)
 	parsed, err := m.doAccessTokenRequest(ctx, m.profile().BuildPath("access-token", "b2b"), body, timestamp)
-	if err != nil {
-		return "", err
-	}
-	expiresIn, err := parseExpiresIn(parsed.ExpiresIn)
-	if err != nil {
-		return "", err
+
+	var token string
+	var expiresIn time.Duration
+	if err == nil {
+		expiresIn, err = parseExpiresIn(parsed.ExpiresIn)
+		if err == nil {
+			token = parsed.AccessToken
+		}
 	}
 
-	m.cachedToken = parsed.AccessToken
-	m.expiresAt = now.Add(expiresIn - tokenSafetyMargin)
-	return m.cachedToken, nil
+	m.mu.Lock()
+	if err == nil {
+		m.cachedToken = token
+		m.expiresAt = now.Add(expiresIn - tokenSafetyMargin)
+	}
+	m.inFlight = nil
+	m.mu.Unlock()
+
+	fetch.token, fetch.err = token, err
+	close(fetch.done)
+	return token, err
 }
 
 // AccessTokenB2B2C exchanges an authorization code or refresh token for a
