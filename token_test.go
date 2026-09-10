@@ -1,0 +1,349 @@
+package snap
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+// fakeClock is an injectable, manually-advanced clock for TokenManager.Now.
+type fakeClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func newFakeClock(start time.Time) *fakeClock {
+	return &fakeClock{now: start}
+}
+
+func (c *fakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *fakeClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
+func TestTokenManager_AccessTokenB2B_CachesAndRefetchesAfterExpiry(t *testing.T) {
+	var reqCount atomic.Int64
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got == "" || got[len(got)-len("/access-token/b2b"):] != "/access-token/b2b" {
+			t.Errorf("request path = %q, want suffix /access-token/b2b", got)
+		}
+		var gotBody map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		if got := gotBody["grantType"]; got != "client_credentials" {
+			t.Errorf("request body[grantType] = %v, want client_credentials", got)
+		}
+
+		n := reqCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if n == 1 {
+			_, _ = io.WriteString(w, `{"accessToken":"tok1","tokenType":"Bearer","expiresIn":"900"}`)
+		} else {
+			_, _ = io.WriteString(w, `{"accessToken":"tok2","tokenType":"Bearer","expiresIn":"900"}`)
+		}
+	}))
+	defer server.Close()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	clock := newFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	m := &TokenManager{
+		BaseURL:   server.URL,
+		ClientKey: "client-key",
+		Signer:    key,
+		Now:       clock.Now,
+	}
+
+	tok1, err := m.AccessTokenB2B(context.Background())
+	if err != nil {
+		t.Fatalf("first AccessTokenB2B() error = %v", err)
+	}
+	if tok1 != "tok1" {
+		t.Fatalf("first token = %q, want tok1", tok1)
+	}
+	if got := reqCount.Load(); got != 1 {
+		t.Fatalf("request count after first call = %d, want 1", got)
+	}
+
+	// Before the computed expiry (900s - 30s safety margin): must not
+	// re-fetch.
+	clock.Advance(800 * time.Second)
+	tok2, err := m.AccessTokenB2B(context.Background())
+	if err != nil {
+		t.Fatalf("second AccessTokenB2B() error = %v", err)
+	}
+	if tok2 != "tok1" {
+		t.Errorf("second token = %q, want cached tok1", tok2)
+	}
+	if got := reqCount.Load(); got != 1 {
+		t.Fatalf("request count after second call = %d, want 1 (should be cached)", got)
+	}
+
+	// Past the computed expiry (800 + 130 = 930s > 900 - 30 = 870s): must
+	// re-fetch.
+	clock.Advance(130 * time.Second)
+	tok3, err := m.AccessTokenB2B(context.Background())
+	if err != nil {
+		t.Fatalf("third AccessTokenB2B() error = %v", err)
+	}
+	if tok3 != "tok2" {
+		t.Errorf("third token = %q, want refetched tok2", tok3)
+	}
+	if got := reqCount.Load(); got != 2 {
+		t.Fatalf("request count after third call = %d, want 2 (should have refetched)", got)
+	}
+}
+
+func TestTokenManager_AccessTokenB2B_ConcurrentCallersShareOneFetch(t *testing.T) {
+	var reqCount atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"accessToken":"tok1","tokenType":"Bearer","expiresIn":"900"}`)
+	}))
+	defer server.Close()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	m := &TokenManager{
+		BaseURL:   server.URL,
+		ClientKey: "client-key",
+		Signer:    key,
+	}
+
+	const n = 10
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = m.AccessTokenB2B(context.Background())
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("caller %d: AccessTokenB2B() error = %v", i, err)
+		}
+	}
+	if got := reqCount.Load(); got != 1 {
+		t.Errorf("request count from %d concurrent callers = %d, want 1", n, got)
+	}
+}
+
+func TestTokenManager_AccessTokenB2B_SignsAsymmetricNeverSymmetric(t *testing.T) {
+	var gotTimestamp, gotSignature string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotTimestamp = r.Header.Get("X-Timestamp")
+		gotSignature = r.Header.Get("X-Signature")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"accessToken":"tok1","tokenType":"Bearer","expiresIn":"900"}`)
+	}))
+	defer server.Close()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	const clientKey = "client-key"
+	m := &TokenManager{
+		BaseURL:   server.URL,
+		ClientKey: clientKey,
+		Signer:    key,
+	}
+
+	if _, err := m.AccessTokenB2B(context.Background()); err != nil {
+		t.Fatalf("AccessTokenB2B() error = %v", err)
+	}
+	if gotTimestamp == "" || gotSignature == "" {
+		t.Fatal("request missing X-Timestamp or X-Signature")
+	}
+
+	stringToSign := BuildStringToSignAccessToken(clientKey, gotTimestamp)
+	if err := VerifyAsymmetric(key.Public(), stringToSign, gotSignature); err != nil {
+		t.Errorf("X-Signature does not verify as SignAsymmetric(%q): %v", stringToSign, err)
+	}
+}
+
+func TestTokenManager_AccessTokenB2B_ErrorResponseCode(t *testing.T) {
+	tests := []struct {
+		name         string
+		httpStatus   int
+		responseCode string
+		wantSentinel error
+	}{
+		{"400 bad request", http.StatusBadRequest, "4007300", ErrBadRequest},
+		{"401 unauthorized", http.StatusUnauthorized, "4017301", ErrUnauthorized},
+		{"500 internal server error", http.StatusInternalServerError, "5007300", ErrInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.httpStatus)
+				_, _ = io.WriteString(w, `{"responseCode":"`+tt.responseCode+`","responseMessage":"failed"}`)
+			}))
+			defer server.Close()
+
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatalf("rsa.GenerateKey: %v", err)
+			}
+			m := &TokenManager{BaseURL: server.URL, ClientKey: "client-key", Signer: key}
+
+			tok, err := m.AccessTokenB2B(context.Background())
+			if err == nil {
+				t.Fatal("AccessTokenB2B() error = nil, want non-nil for a non-2xx responseCode")
+			}
+			if tok != "" {
+				t.Errorf("AccessTokenB2B() token = %q, want empty on error", tok)
+			}
+			if !errors.Is(err, tt.wantSentinel) {
+				t.Errorf("AccessTokenB2B() error = %v, want errors.Is match against %v", err, tt.wantSentinel)
+			}
+		})
+	}
+}
+
+func TestTokenManager_AccessTokenB2B2C_GrantTypes(t *testing.T) {
+	tests := []struct {
+		name       string
+		grantType  GrantType
+		code       string
+		wantField  string
+		wantOther  string // field that must be ABSENT from the request body
+		respExtras string
+	}{
+		{
+			name:      "authorization code",
+			grantType: GrantTypeAuthorizationCode,
+			code:      "the-auth-code",
+			wantField: "authCode",
+			wantOther: "refreshToken",
+		},
+		{
+			name:      "refresh token",
+			grantType: GrantTypeRefreshToken,
+			code:      "the-refresh-token",
+			wantField: "refreshToken",
+			wantOther: "authCode",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.URL.Path; got == "" || got[len(got)-len("/access-token/b2b2c"):] != "/access-token/b2b2c" {
+					t.Errorf("request path = %q, want suffix /access-token/b2b2c", got)
+				}
+				if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+					t.Errorf("decode request body: %v", err)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"accessToken":"tok1","tokenType":"Bearer","expiresIn":"1296000","refreshToken":"new-refresh-token"}`)
+			}))
+			defer server.Close()
+
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatalf("rsa.GenerateKey: %v", err)
+			}
+			m := &TokenManager{BaseURL: server.URL, ClientKey: "client-key", Signer: key}
+
+			tok, err := m.AccessTokenB2B2C(context.Background(), tt.grantType, tt.code)
+			if err != nil {
+				t.Fatalf("AccessTokenB2B2C() error = %v", err)
+			}
+
+			if got, ok := gotBody[tt.wantField]; !ok || got != tt.code {
+				t.Errorf("request body[%q] = %v, want %q", tt.wantField, got, tt.code)
+			}
+			if _, present := gotBody[tt.wantOther]; present {
+				t.Errorf("request body unexpectedly contains %q for grant type %q", tt.wantOther, tt.grantType)
+			}
+			if got := gotBody["grantType"]; got != string(tt.grantType) {
+				t.Errorf("request body[grantType] = %v, want %q", got, tt.grantType)
+			}
+
+			if tok.AccessToken != "tok1" {
+				t.Errorf("AccessToken = %q, want tok1", tok.AccessToken)
+			}
+			if tok.TokenType != "Bearer" {
+				t.Errorf("TokenType = %q, want Bearer", tok.TokenType)
+			}
+			if tok.ExpiresIn != 1296000*time.Second {
+				t.Errorf("ExpiresIn = %v, want %v", tok.ExpiresIn, 1296000*time.Second)
+			}
+			if tok.RefreshToken != "new-refresh-token" {
+				t.Errorf("RefreshToken = %q, want new-refresh-token", tok.RefreshToken)
+			}
+		})
+	}
+}
+
+func TestTokenManager_AccessTokenB2B2C_ErrorResponseCode(t *testing.T) {
+	tests := []struct {
+		name         string
+		httpStatus   int
+		responseCode string
+		wantSentinel error
+	}{
+		{"400 bad request", http.StatusBadRequest, "4007300", ErrBadRequest},
+		{"401 unauthorized", http.StatusUnauthorized, "4017301", ErrUnauthorized},
+		{"500 internal server error", http.StatusInternalServerError, "5007300", ErrInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.httpStatus)
+				_, _ = io.WriteString(w, `{"responseCode":"`+tt.responseCode+`","responseMessage":"failed"}`)
+			}))
+			defer server.Close()
+
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatalf("rsa.GenerateKey: %v", err)
+			}
+			m := &TokenManager{BaseURL: server.URL, ClientKey: "client-key", Signer: key}
+
+			tok, err := m.AccessTokenB2B2C(context.Background(), GrantTypeAuthorizationCode, "code")
+			if err == nil {
+				t.Fatal("AccessTokenB2B2C() error = nil, want non-nil for a non-2xx responseCode")
+			}
+			if tok != (Token{}) {
+				t.Errorf("AccessTokenB2B2C() token = %+v, want zero value on error", tok)
+			}
+			if !errors.Is(err, tt.wantSentinel) {
+				t.Errorf("AccessTokenB2B2C() error = %v, want errors.Is match against %v", err, tt.wantSentinel)
+			}
+		})
+	}
+}
