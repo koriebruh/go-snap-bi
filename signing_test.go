@@ -48,6 +48,8 @@ func TestSignVerifySymmetric(t *testing.T) {
 		{"tampered signature fails", secret, stringToSign, sig[:len(sig)-1] + "0", false},
 		{"tampered stringToSign fails", secret, stringToSign + "x", sig, false},
 		{"wrong secret fails", "other-secret", stringToSign, sig, false},
+		{"uppercase-hex signature still verifies", secret, stringToSign, strings.ToUpper(sig), true},
+		{"non-hex signature fails closed, not panics", secret, stringToSign, "not-hex!!", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -56,6 +58,23 @@ func TestSignVerifySymmetric(t *testing.T) {
 				t.Errorf("VerifySymmetric() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSignSymmetricKnownAnswer checks SignSymmetric against a signature
+// value computed independently (Python stdlib hmac+hashlib), not by
+// round-tripping through this package's own functions — a round-trip-only
+// test can't detect a paired algorithm substitution (e.g. accidentally
+// switching to SHA-384 or base64 output) since it would still agree with
+// itself.
+func TestSignSymmetricKnownAnswer(t *testing.T) {
+	const secret = "s3cr3t"
+	const stringToSign = "POST:/v1.0/access-token/b2b:2026-09-10T10:00:00.000+07:00"
+	const wantHex = "40092593b7c6e6e5bf4a09ef346d831089fe3bb46efcdff1a91545e0f01eb064c5b2745b93b157389c39c64a8436c2e8bc07b0d9de723fb76c39c4b8c6c436ff"
+
+	got := SignSymmetric(secret, stringToSign)
+	if got != wantHex {
+		t.Errorf("SignSymmetric() = %q, want independently-computed %q", got, wantHex)
 	}
 }
 
@@ -111,8 +130,60 @@ func TestVerifyAsymmetricRejectsNonRSAKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ed25519.GenerateKey() error = %v", err)
 	}
-	if err := VerifyAsymmetric(pub, "x", "00"); err == nil {
-		t.Error("VerifyAsymmetric() with non-RSA public key: want error, got nil")
+	if err := VerifyAsymmetric(pub, "x", "00"); !errors.Is(err, ErrNotRSASigner) {
+		t.Errorf("VerifyAsymmetric() with non-RSA public key: err = %v, want errors.Is(err, ErrNotRSASigner)", err)
+	}
+}
+
+func TestSignAsymmetricRejectsNonRSASigner(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("ed25519.GenerateKey() error = %v", err)
+	}
+	if _, err := SignAsymmetric(priv, "x"); !errors.Is(err, ErrNotRSASigner) {
+		t.Errorf("SignAsymmetric() with non-RSA signer: err = %v, want errors.Is(err, ErrNotRSASigner)", err)
+	}
+}
+
+func TestSignVerifyAsymmetricRejectWeakKey(t *testing.T) {
+	weakKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey(1024) error = %v", err)
+	}
+	if _, err := SignAsymmetric(weakKey, "x"); !errors.Is(err, ErrWeakRSAKey) {
+		t.Errorf("SignAsymmetric() with 1024-bit key: err = %v, want errors.Is(err, ErrWeakRSAKey)", err)
+	}
+
+	// A signature produced by a strong key must still be rejected on the
+	// verify side if the caller is (mis)configured to check against a weak
+	// public key — the floor applies independently on each side.
+	strongKey := testRSAKeys()[0]
+	sig, err := SignAsymmetric(strongKey, "x")
+	if err != nil {
+		t.Fatalf("SignAsymmetric() error = %v", err)
+	}
+	if err := VerifyAsymmetric(&weakKey.PublicKey, "x", sig); !errors.Is(err, ErrWeakRSAKey) {
+		t.Errorf("VerifyAsymmetric() with 1024-bit public key: err = %v, want errors.Is(err, ErrWeakRSAKey)", err)
+	}
+}
+
+// TestSignAsymmetricIsDeterministic asserts SHA256withRSA (PKCS#1 v1.5)
+// signing produces identical output across repeated calls for the same
+// input. This is true for PKCS#1 v1.5 and false for RSA-PSS (which is
+// randomized) — a determinism regression here would mean the implementation
+// silently drifted to PSS, which a pure round-trip test cannot detect.
+func TestSignAsymmetricIsDeterministic(t *testing.T) {
+	key := testRSAKeys()[0]
+	sig1, err := SignAsymmetric(key, "deterministic check")
+	if err != nil {
+		t.Fatalf("SignAsymmetric() error = %v", err)
+	}
+	sig2, err := SignAsymmetric(key, "deterministic check")
+	if err != nil {
+		t.Fatalf("SignAsymmetric() error = %v", err)
+	}
+	if sig1 != sig2 {
+		t.Errorf("SignAsymmetric() not deterministic: %q != %q (expected for PKCS#1 v1.5; would legitimately differ under RSA-PSS)", sig1, sig2)
 	}
 }
 
