@@ -51,6 +51,13 @@ func SignSymmetric(clientSecret, stringToSign string) string {
 // signature of stringToSign under clientSecret, using a constant-time
 // comparison.
 func VerifySymmetric(clientSecret, stringToSign, signature string) bool {
+	if clientSecret == "" {
+		// An empty key turns HMAC into a deterministic, publicly computable
+		// MAC — a KeyStore implementation mistake that returns "" for an
+		// unregistered client must not be treated as "verifies against the
+		// empty string," so this is rejected before ever reaching hmac.Equal.
+		return false
+	}
 	expected := SignSymmetric(clientSecret, stringToSign)
 	expectedBytes, err := hex.DecodeString(expected)
 	if err != nil {
@@ -73,7 +80,7 @@ func SignAsymmetric(signer crypto.Signer, stringToSign string) (string, error) {
 		return "", fmt.Errorf("snap: sign asymmetric: %w", ErrNotRSASigner)
 	}
 	rsaPub, ok := signer.Public().(*rsa.PublicKey)
-	if !ok {
+	if !ok || rsaPub == nil || rsaPub.N == nil {
 		return "", fmt.Errorf("snap: sign asymmetric: %w", ErrNotRSASigner)
 	}
 	if rsaPub.N.BitLen() < minRSAKeyBits {
@@ -93,7 +100,7 @@ func SignAsymmetric(signer crypto.Signer, stringToSign string) (string, error) {
 // signature does not verify.
 func VerifyAsymmetric(pub crypto.PublicKey, stringToSign, signature string) error {
 	rsaPub, ok := pub.(*rsa.PublicKey)
-	if !ok {
+	if !ok || rsaPub == nil || rsaPub.N == nil {
 		return fmt.Errorf("snap: verify asymmetric: %w", ErrNotRSASigner)
 	}
 	if rsaPub.N.BitLen() < minRSAKeyBits {

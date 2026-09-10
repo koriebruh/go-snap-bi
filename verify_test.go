@@ -99,26 +99,30 @@ func validTransactionRequest(t *testing.T, symmetric bool) IncomingRequest {
 
 func TestServerVerifier_VerifyAccessTokenRequest_RoundTrip(t *testing.T) {
 	store := newVerifyTestStore()
-	v := &ServerVerifier{KeyStore: store}
+	// Freshness is exercised separately (TestServerVerifier_TimestampFreshness);
+	// disabled here so this test's fixed fixture timestamp doesn't depend on
+	// when it happens to run.
+	v := &ServerVerifier{KeyStore: store, TimestampWindow: DisableTimestampFreshnessCheck}
 
 	tests := []struct {
-		name    string
-		mutate  func(IncomingRequest) IncomingRequest
-		wantErr bool
+		name         string
+		mutate       func(IncomingRequest) IncomingRequest
+		wantErr      bool
+		wantMismatch bool // asserted via errors.Is(err, ErrSignatureMismatch) when true
 	}{
-		{"valid", func(r IncomingRequest) IncomingRequest { return r }, false},
+		{"valid", func(r IncomingRequest) IncomingRequest { return r }, false, false},
 		{"tampered signature", func(r IncomingRequest) IncomingRequest {
 			r.Signature = tamperHex(r.Signature)
 			return r
-		}, true},
+		}, true, true},
 		{"tampered timestamp", func(r IncomingRequest) IncomingRequest {
 			r.Timestamp = "2026-09-10T10:00:01.000+07:00"
 			return r
-		}, true},
+		}, true, true},
 		{"client key points at different key", func(r IncomingRequest) IncomingRequest {
 			r.ClientKey = verifyTestClientB
 			return r
-		}, true},
+		}, true, true},
 	}
 
 	for _, tc := range tests {
@@ -130,6 +134,9 @@ func TestServerVerifier_VerifyAccessTokenRequest_RoundTrip(t *testing.T) {
 			}
 			if !tc.wantErr && err != nil {
 				t.Fatalf("want no error, got %v", err)
+			}
+			if tc.wantMismatch && !errors.Is(err, ErrSignatureMismatch) {
+				t.Errorf("want errors.Is(err, ErrSignatureMismatch), got %v", err)
 			}
 		})
 	}
@@ -144,30 +151,31 @@ func TestServerVerifier_VerifyTransactionRequest_RoundTrip(t *testing.T) {
 			mode = SignatureModeSymmetric
 		}
 		t.Run(fmt.Sprintf("symmetric=%v", symmetric), func(t *testing.T) {
-			v := &ServerVerifier{KeyStore: store, Mode: mode}
+			v := &ServerVerifier{KeyStore: store, Mode: mode, TimestampWindow: DisableTimestampFreshnessCheck}
 
 			tests := []struct {
-				name    string
-				mutate  func(IncomingRequest) IncomingRequest
-				wantErr bool
+				name         string
+				mutate       func(IncomingRequest) IncomingRequest
+				wantErr      bool
+				wantMismatch bool
 			}{
-				{"valid", func(r IncomingRequest) IncomingRequest { return r }, false},
+				{"valid", func(r IncomingRequest) IncomingRequest { return r }, false, false},
 				{"tampered signature", func(r IncomingRequest) IncomingRequest {
 					r.Signature = tamperHex(r.Signature)
 					return r
-				}, true},
+				}, true, true},
 				{"tampered body", func(r IncomingRequest) IncomingRequest {
 					r.Body = []byte(`{"amount":"99999.00"}`)
 					return r
-				}, true},
+				}, true, true},
 				{"tampered timestamp", func(r IncomingRequest) IncomingRequest {
 					r.Timestamp = "2026-09-10T10:00:01.000+07:00"
 					return r
-				}, true},
+				}, true, true},
 				{"client key points at different key/secret", func(r IncomingRequest) IncomingRequest {
 					r.ClientKey = verifyTestClientB
 					return r
-				}, true},
+				}, true, true},
 			}
 
 			for _, tc := range tests {
@@ -180,6 +188,9 @@ func TestServerVerifier_VerifyTransactionRequest_RoundTrip(t *testing.T) {
 					if !tc.wantErr && err != nil {
 						t.Fatalf("want no error, got %v", err)
 					}
+					if tc.wantMismatch && !errors.Is(err, ErrSignatureMismatch) {
+						t.Errorf("want errors.Is(err, ErrSignatureMismatch), got %v", err)
+					}
 				})
 			}
 		})
@@ -191,7 +202,7 @@ func TestServerVerifier_VerifyTransactionRequest_AsymmetricIgnoresAccessToken(t 
 	// AccessToken on an otherwise-correctly-signed asymmetric request must
 	// still verify.
 	store := newVerifyTestStore()
-	v := &ServerVerifier{KeyStore: store, Mode: SignatureModeAsymmetric}
+	v := &ServerVerifier{KeyStore: store, Mode: SignatureModeAsymmetric, TimestampWindow: DisableTimestampFreshnessCheck}
 	req := validTransactionRequest(t, false)
 	req.AccessToken = "this-is-not-part-of-the-asymmetric-formula"
 	if err := v.VerifyTransactionRequest(req); err != nil {
@@ -203,7 +214,7 @@ func TestServerVerifier_KeyStoreLookupFailureIsNotSwallowed(t *testing.T) {
 	store := newVerifyTestStore()
 
 	t.Run("access token unknown client key", func(t *testing.T) {
-		v := &ServerVerifier{KeyStore: store}
+		v := &ServerVerifier{KeyStore: store, TimestampWindow: DisableTimestampFreshnessCheck}
 		req := validAccessTokenRequest()
 		req.ClientKey = "unknown-client"
 		err := v.VerifyAccessTokenRequest(req)
@@ -219,7 +230,7 @@ func TestServerVerifier_KeyStoreLookupFailureIsNotSwallowed(t *testing.T) {
 	})
 
 	t.Run("transaction symmetric unknown client key", func(t *testing.T) {
-		v := &ServerVerifier{KeyStore: store, Mode: SignatureModeSymmetric}
+		v := &ServerVerifier{KeyStore: store, Mode: SignatureModeSymmetric, TimestampWindow: DisableTimestampFreshnessCheck}
 		req := validTransactionRequest(t, true)
 		req.ClientKey = "unknown-client"
 		err := v.VerifyTransactionRequest(req)
@@ -232,7 +243,7 @@ func TestServerVerifier_KeyStoreLookupFailureIsNotSwallowed(t *testing.T) {
 	})
 
 	t.Run("transaction asymmetric unknown client key", func(t *testing.T) {
-		v := &ServerVerifier{KeyStore: store, Mode: SignatureModeAsymmetric}
+		v := &ServerVerifier{KeyStore: store, Mode: SignatureModeAsymmetric, TimestampWindow: DisableTimestampFreshnessCheck}
 		req := validTransactionRequest(t, false)
 		req.ClientKey = "unknown-client"
 		err := v.VerifyTransactionRequest(req)
@@ -297,7 +308,9 @@ func TestServerVerifier_TimestampFreshness(t *testing.T) {
 		{"within window, future", 5 * time.Minute, 1 * time.Minute, false},
 		{"outside window, past", 5 * time.Minute, -10 * time.Minute, true},
 		{"outside window, future", 5 * time.Minute, 10 * time.Minute, true},
-		{"window zero accepts wildly old timestamp", 0, -24 * time.Hour, false},
+		{"disable sentinel accepts wildly old timestamp", DisableTimestampFreshnessCheck, -24 * time.Hour, false},
+		{"zero value uses DefaultTimestampWindow: within default, accepted", 0, -1 * time.Minute, false},
+		{"zero value uses DefaultTimestampWindow: outside default, rejected", 0, -10 * time.Minute, true},
 	}
 
 	methods := []struct {
@@ -375,7 +388,7 @@ func TestServerVerifier_VerifyAccessTokenRequest_IgnoresMode(t *testing.T) {
 
 	for _, mode := range []SignatureMode{SignatureModeSymmetric, SignatureModeAsymmetric} {
 		t.Run(fmt.Sprintf("mode=%v", mode), func(t *testing.T) {
-			v := &ServerVerifier{KeyStore: store, Mode: mode}
+			v := &ServerVerifier{KeyStore: store, Mode: mode, TimestampWindow: DisableTimestampFreshnessCheck}
 			if err := v.VerifyAccessTokenRequest(req); err != nil {
 				t.Fatalf("want no error regardless of Mode, got %v", err)
 			}

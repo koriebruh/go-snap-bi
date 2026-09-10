@@ -1,6 +1,7 @@
 package snap
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
@@ -9,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -63,6 +65,10 @@ func TestSignVerifySymmetric(t *testing.T) {
 		{"wrong secret fails", "other-secret", stringToSign, sig, false},
 		{"uppercase-hex signature still verifies", secret, stringToSign, strings.ToUpper(sig), true},
 		{"non-hex signature fails closed, not panics", secret, stringToSign, "not-hex!!", false},
+		{
+			"empty clientSecret rejected, not treated as a valid HMAC key",
+			"", stringToSign, SignSymmetric("", stringToSign), false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -178,6 +184,32 @@ func TestSignVerifyAsymmetricRejectWeakKey(t *testing.T) {
 	if err := VerifyAsymmetric(&weakKey.PublicKey, "x", sig); !errors.Is(err, ErrWeakRSAKey) {
 		t.Errorf("VerifyAsymmetric() with 1024-bit public key: err = %v, want errors.Is(err, ErrWeakRSAKey)", err)
 	}
+}
+
+// TestSignVerifyAsymmetricRejectsZeroValuePublicKey is the regression test
+// for a security review finding: a *rsa.PublicKey with a nil N field (e.g.
+// &rsa.PublicKey{} returned by a buggy KeyStore before it's populated)
+// panicked on rsaPub.N.BitLen() instead of failing closed with an error.
+func TestSignVerifyAsymmetricRejectsZeroValuePublicKey(t *testing.T) {
+	zeroPub := &rsa.PublicKey{}
+	if err := VerifyAsymmetric(zeroPub, "x", "00"); !errors.Is(err, ErrNotRSASigner) {
+		t.Errorf("VerifyAsymmetric() with zero-value public key: err = %v, want errors.Is(err, ErrNotRSASigner)", err)
+	}
+
+	zeroSigner := zeroValueSigner{}
+	if _, err := SignAsymmetric(zeroSigner, "x"); !errors.Is(err, ErrNotRSASigner) {
+		t.Errorf("SignAsymmetric() with a signer whose Public() returns a zero-value key: err = %v, want errors.Is(err, ErrNotRSASigner)", err)
+	}
+}
+
+// zeroValueSigner is a crypto.Signer whose Public() returns a *rsa.PublicKey
+// with a nil N — simulating a buggy caller-supplied Signer implementation,
+// for TestSignVerifyAsymmetricRejectsZeroValuePublicKey.
+type zeroValueSigner struct{}
+
+func (zeroValueSigner) Public() crypto.PublicKey { return &rsa.PublicKey{} }
+func (zeroValueSigner) Sign(io.Reader, []byte, crypto.SignerOpts) ([]byte, error) {
+	panic("not reached: rejected before Sign is called")
 }
 
 // TestSignAsymmetricIsDeterministic asserts SHA256withRSA (PKCS#1 v1.5)

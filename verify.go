@@ -16,12 +16,15 @@ type KeyStore interface {
 
 // SignatureMode is the transaction-level signing mode agreed with a partner
 // at registration time, per the standard's own wording — this is config,
-// not a per-request runtime choice.
+// not a per-request runtime choice. The zero value is
+// SignatureModeAsymmetric to match HeaderBuilder.Symmetric's zero value
+// (false, i.e. asymmetric) — the two are meant to mirror each other for the
+// same partner configuration, on the client and server side respectively.
 type SignatureMode int
 
 const (
-	SignatureModeSymmetric SignatureMode = iota // default zero value
-	SignatureModeAsymmetric
+	SignatureModeAsymmetric SignatureMode = iota // default zero value; matches HeaderBuilder{}'s default (Symmetric: false)
+	SignatureModeSymmetric
 )
 
 // IncomingRequest holds the fields a ServerVerifier needs, extracted by the
@@ -47,13 +50,27 @@ var ErrSignatureMismatch = errors.New("snap: signature mismatch")
 // KeyStore, instead of panicking on the first lookup.
 var ErrNoKeyStore = errors.New("snap: verify: KeyStore is not set")
 
+// DefaultTimestampWindow is the freshness tolerance used when
+// ServerVerifier.TimestampWindow is left at its zero value. The standard
+// requires timestamp freshness checking, so an unconfigured ServerVerifier
+// fails closed with this sane default rather than silently skipping the
+// check — matching every other optional field in this package (Now,
+// Profile, HTTPClient), where absent means "safe default," never "disabled."
+const DefaultTimestampWindow = 5 * time.Minute
+
+// DisableTimestampFreshnessCheck is a sentinel TimestampWindow value that
+// explicitly disables freshness checking. Distinct from the zero value on
+// purpose, so "I forgot to set this" (zero value, gets DefaultTimestampWindow)
+// and "I deliberately don't want this" (this sentinel) can't be confused.
+const DisableTimestampFreshnessCheck time.Duration = -1
+
 // ServerVerifier verifies incoming SNAP requests on the Penyedia Layanan
 // (server) side — the inverse of the client-side signing in HeaderBuilder
 // and TokenManager.
 type ServerVerifier struct {
 	KeyStore        KeyStore
 	Mode            SignatureMode    // transaction-level mode; access-token requests are always asymmetric regardless of this
-	TimestampWindow time.Duration    // freshness tolerance; zero means no freshness check (explicit opt-in, not hardcoded)
+	TimestampWindow time.Duration    // freshness tolerance; zero means DefaultTimestampWindow, DisableTimestampFreshnessCheck explicitly disables it
 	Profile         Profile          // optional; nil means DefaultProfile{}, used only for TimestampLayout when parsing Timestamp
 	Now             func() time.Time // optional; nil means time.Now, injectable for tests
 }
@@ -74,22 +91,26 @@ func (v *ServerVerifier) profile() Profile {
 
 // checkFreshness verifies req.Timestamp parses under the active Profile's
 // TimestampLayout and falls within TimestampWindow of now, in either
-// direction. A zero TimestampWindow is an explicit opt-out — the timestamp
-// is not even parsed in that case.
+// direction. A zero TimestampWindow uses DefaultTimestampWindow; only the
+// explicit DisableTimestampFreshnessCheck sentinel skips the check entirely.
 func (v *ServerVerifier) checkFreshness(timestamp string) error {
-	if v.TimestampWindow <= 0 {
+	window := v.TimestampWindow
+	if window == DisableTimestampFreshnessCheck {
 		return nil
+	}
+	if window == 0 {
+		window = DefaultTimestampWindow
 	}
 	parsed, err := time.Parse(v.profile().TimestampLayout(), timestamp)
 	if err != nil {
-		return fmt.Errorf("snap: verify: parse timestamp: %w", err)
+		return fmt.Errorf("snap: verify: parse timestamp %s: invalid format", truncateForError(timestamp))
 	}
 	skew := v.now().Sub(parsed)
 	if skew < 0 {
 		skew = -skew
 	}
-	if skew > v.TimestampWindow {
-		return fmt.Errorf("snap: verify: timestamp %s outside freshness window %s", truncateForError(timestamp), v.TimestampWindow)
+	if skew > window {
+		return fmt.Errorf("snap: verify: timestamp %s outside freshness window %s", truncateForError(timestamp), window)
 	}
 	return nil
 }
@@ -119,6 +140,13 @@ func (v *ServerVerifier) VerifyAccessTokenRequest(req IncomingRequest) error {
 // signature per the pre-agreed SignatureMode. A KeyStore lookup succeeding
 // does not by itself make the request valid — the signature check always
 // runs and is what determines pass/fail.
+//
+// A nil return proves the caller possesses the shared secret or private key
+// for req.ClientKey and that the signature is bound to req.AccessToken as
+// given — it does not itself validate that req.AccessToken is genuine,
+// unexpired, or was actually issued to this client. Token issuance and
+// introspection are out of this package's scope; callers who need that
+// check must perform it separately.
 func (v *ServerVerifier) VerifyTransactionRequest(req IncomingRequest) error {
 	if v.KeyStore == nil {
 		return ErrNoKeyStore
