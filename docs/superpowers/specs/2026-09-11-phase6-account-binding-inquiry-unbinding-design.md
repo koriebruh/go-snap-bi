@@ -29,7 +29,7 @@ typo). POST.
 | accountCurrency | String | O | `string` | |
 | accountName | String | O | `string` | |
 | accountNo | String | O | `string` | |
-| accountTransactionLimit | **Numeric** | O | **`string`** | Guides tab types this Numeric, but the portal's own worked example renders it as a quoted wire value (`"accountTransactionLimit":"1000000"`) — same class of decision as Phase 4's `APIKey`, but here a worked example actually confirms the wire shape rather than leaving it to guesswork, so `string` is not a guess, it matches the observed example. |
+| accountTransactionLimit | **Numeric** | O | **`json.RawMessage`** | Same fix as Phase 4's `APIKey`, same reasoning: Guides tab types this Numeric, and while this portal's one worked example renders it as a quoted wire value (`"accountTransactionLimit":"1000000"`), SNAP is a multi-PJP standard — one example from one PJP is thin evidence about what every issuer sends. A plain `string` field would fail the entire decode (discarding `ResponseCode`/`AccountNo`/`AccountName`/etc. too) if some other issuer sends it unquoted, for a field this package has no way to retry around. `json.RawMessage` tolerates either shape. |
 | endDatePeriod | String (YYYY-MM-DD) | O | `string` | |
 | startDatePeriod | String (YYYY-MM-DD) | O | `string` | |
 | additionalInfo | Object | O | `json.RawMessage` | |
@@ -104,11 +104,11 @@ non-2xx-responseCode, non-2xx-status-with-2xx-body,
 own risk, the same way Phase 4 and Phase 5 each added a 6th test for their
 respective ambiguous/mandatory field:
 
-- Account Binding Inquiry: a decode-failure test for `accountTransactionLimit`
-  sent as an unquoted JSON number instead of the portal's documented
-  quoted-string wire shape — confirms the failure is a clean wrapped error,
-  not silent corruption, since the Guides tab's "Numeric" label leaves that
-  shape possible for some issuer even though the worked example is quoted.
+- Account Binding Inquiry: a table-driven wire-shape test for
+  `accountTransactionLimit` (quoted string, unquoted number, JSON null),
+  identical in shape to Phase 4's `TestAccountCreation_APIKeyAcceptsEitherWireShape`,
+  confirming `json.RawMessage` tolerates every shape without losing the
+  rest of the response.
 - Account Unbinding: a `MerchantID`-always-serialized test, identical in
   shape to Phase 5's `TestAccountBinding_MerchantIDAlwaysSerialized`, since
   `MerchantID` is likewise the one request field without `omitempty`.

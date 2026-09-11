@@ -48,7 +48,7 @@ func TestAccountBindingInquiry_ParsesResponse(t *testing.T) {
 		AccountCurrency:         "IDR",
 		AccountName:             "Alen Miucic",
 		AccountNo:               "11231271284140",
-		AccountTransactionLimit: "1000000",
+		AccountTransactionLimit: json.RawMessage(`"1000000"`),
 		EndDatePeriod:           "2022-05-21",
 		StartDatePeriod:         "2020-05-21",
 		AdditionalInfo:          json.RawMessage(`{"channel":"mobilephone"}`),
@@ -58,30 +58,48 @@ func TestAccountBindingInquiry_ParsesResponse(t *testing.T) {
 	}
 }
 
-// TestAccountBindingInquiry_UnquotedTransactionLimitFailsDecodeCleanly
-// documents a known risk of typing AccountTransactionLimit as string: the
-// Guides tab labels it Numeric, and this package trusts a single portal
-// worked example that renders it quoted. If some issuer instead sends an
-// unquoted JSON number, decode fails for the whole response (not just this
-// field) — this test pins that the failure is a clean wrapped decode error,
-// not silent corruption or a partially-populated response being returned
-// as if it were valid.
-func TestAccountBindingInquiry_UnquotedTransactionLimitFailsDecodeCleanly(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"responseCode":"2000800","responseMessage":"ok","accountTransactionLimit":1000000}`))
-	}))
-	defer server.Close()
-
-	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/registration-account-inquiry"
-	tr := &Transport{}
-	resp, err := AccountBindingInquiry(context.Background(), tr, hb, AccountBindingInquiryRequest{})
-	if err == nil {
-		t.Fatalf("AccountBindingInquiry() error = nil, want non-nil for an unquoted numeric accountTransactionLimit; got %+v", resp)
+// TestAccountBindingInquiry_TransactionLimitAcceptsEitherWireShape is the
+// regression test for a santa-loop finding: the Guides tab labels
+// accountTransactionLimit "Numeric", and while this portal's one worked
+// example renders it quoted, SNAP is a multi-PJP standard and one example
+// is thin evidence about what every issuer sends. A plain string field
+// would hard-fail the entire decode (discarding AccountNo/AccountName/etc.
+// too) for an unquoted numeric value. json.RawMessage tolerates either
+// shape — same fix, same reasoning, as AccountCreationResponse.APIKey.
+func TestAccountBindingInquiry_TransactionLimitAcceptsEitherWireShape(t *testing.T) {
+	tests := []struct {
+		name  string
+		limit string
+	}{
+		{"quoted string", `"1000000"`},
+		{"unquoted number", `1000000`},
+		// json null decodes to a non-nil 4-byte RawMessage("null"), distinct
+		// from an absent key (which decodes to nil) — worth pinning
+		// explicitly per the same convention as the APIKey regression test.
+		{"json null", `null`},
 	}
-	if !reflect.DeepEqual(resp, AccountBindingInquiryResponse{}) {
-		t.Errorf("AccountBindingInquiry() response = %+v, want zero value on decode failure", resp)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"responseCode":"2000800","responseMessage":"ok","accountNo":"11231271284140","accountTransactionLimit":`+tt.limit+`}`)
+			}))
+			defer server.Close()
+
+			hb := testHeaderBuilder(server.URL)
+			hb.EndpointURL = server.URL + "/v1.0/registration-account-inquiry"
+			tr := &Transport{}
+			resp, err := AccountBindingInquiry(context.Background(), tr, hb, AccountBindingInquiryRequest{})
+			if err != nil {
+				t.Fatalf("AccountBindingInquiry() error = %v, want nil — accountTransactionLimit shape must not break the whole decode", err)
+			}
+			if resp.AccountNo != "11231271284140" {
+				t.Errorf("AccountNo = %q, want it to survive regardless of accountTransactionLimit's shape", resp.AccountNo)
+			}
+			if string(resp.AccountTransactionLimit) != tt.limit {
+				t.Errorf("AccountTransactionLimit = %s, want raw bytes %s", resp.AccountTransactionLimit, tt.limit)
+			}
+		})
 	}
 }
 

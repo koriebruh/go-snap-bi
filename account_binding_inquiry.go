@@ -9,7 +9,11 @@ import (
 
 // AccountBindingInquiryRequest is the request body for API Account Binding
 // Inquiry (Service Code 08, path .../{version}/registration-account-inquiry
-// — note the URL segment drops the word "binding", per the portal).
+// — note the URL segment drops the word "binding", per the portal). It
+// carries no account identifier itself; per the standard's B2B2C flow this
+// endpoint is part of, the account context is supplied by the customer's
+// access token (see BalanceInquiryRequest for the same B2B2C-token-as-context
+// pattern elsewhere in this package), not by a request body field.
 type AccountBindingInquiryRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	AdditionalInfo     json.RawMessage `json:"additionalInfo,omitempty"`
@@ -19,11 +23,19 @@ type AccountBindingInquiryRequest struct {
 // Binding Inquiry. Unlike AccountBindingResponse (Service Code 07), this
 // response is flat — no accessTokenInfo/userInfo nesting.
 //
-// AccountTransactionLimit is typed string, not a numeric type: the Guides
-// tab labels it "Numeric", but the portal's own worked example renders it
-// as a quoted wire value ("accountTransactionLimit":"1000000") — the wire
-// shape is confirmed, not guessed, so string matches what the server
-// actually sends.
+// AccountTransactionLimit is typed json.RawMessage, not string or a numeric
+// type, for the same reason as AccountCreationResponse.APIKey: the Guides
+// tab labels it "Numeric", and while this portal's one worked example
+// renders it as a quoted wire value ("accountTransactionLimit":"1000000"),
+// SNAP is a multi-PJP standard and one example from one PJP is thin
+// evidence about what every issuer sends. A plain string field would fail
+// the ENTIRE decode (discarding ResponseCode, AccountNo, AccountName, etc.
+// too) if some other issuer sends it unquoted, for a field this package
+// has no way to retry around. json.RawMessage accepts either wire shape
+// without loss; a caller strips surrounding quotes themselves if the value
+// is quoted. A JSON null decodes to a non-nil RawMessage("null"), distinct
+// from an absent key (nil) — a third shape a caller checking for presence
+// should account for.
 type AccountBindingInquiryResponse struct {
 	ResponseCode            string          `json:"responseCode"`
 	ResponseMessage         string          `json:"responseMessage"`
@@ -32,7 +44,7 @@ type AccountBindingInquiryResponse struct {
 	AccountCurrency         string          `json:"accountCurrency,omitempty"`
 	AccountName             string          `json:"accountName,omitempty"`
 	AccountNo               string          `json:"accountNo,omitempty"`
-	AccountTransactionLimit string          `json:"accountTransactionLimit,omitempty"`
+	AccountTransactionLimit json.RawMessage `json:"accountTransactionLimit,omitempty"`
 	EndDatePeriod           string          `json:"endDatePeriod,omitempty"`
 	StartDatePeriod         string          `json:"startDatePeriod,omitempty"`
 	AdditionalInfo          json.RawMessage `json:"additionalInfo,omitempty"`
