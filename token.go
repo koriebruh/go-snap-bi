@@ -127,7 +127,11 @@ func envelopeError(responseCode string) error {
 	}
 	httpStatus, _, _, err := ParseResponseCode(responseCode)
 	if err != nil {
-		return fmt.Errorf("snap: token manager: response carries malformed response code: %w", err)
+		// No "snap: <subsystem>:" prefix here: this is a shared helper used
+		// by every per-service binding, not just TokenManager, and every
+		// caller already wraps this with its own "snap: <subsystem>: %w" —
+		// adding one here would double it up.
+		return fmt.Errorf("response carries malformed response code: %w", err)
 	}
 	if httpStatus >= 200 && httpStatus < 300 {
 		return nil
@@ -163,17 +167,19 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 
 	var parsed accessTokenResponse
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			// A non-JSON body (HTML WAF page, empty body, etc.) on a
+			// non-2xx response must still be errors.Is-matchable via the
+			// HTTP status, not just an opaque decode error.
+			return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w: http status %d: decode response body: %w", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode, err)
+		}
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: decode response body: %w", err)
 	}
-	if parsed.ResponseCode == "" && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
-		// The body didn't carry a responseCode (a differently-shaped error
-		// body, or a proxy/WAF error page) but the transport-level status
-		// still says this failed — fall back to a status-derived sentinel
-		// rather than treating an empty responseCode as success.
-		return accessTokenResponse{}, fmt.Errorf("%w: http status %d", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode)
-	}
-	if err := envelopeError(parsed.ResponseCode); err != nil {
-		return accessTokenResponse{}, err
+	if err := checkResponseStatus(parsed.ResponseCode, resp.StatusCode); err != nil {
+		// checkResponseStatus is authoritative on the transport status: a
+		// non-2xx HTTP status is never treated as success, even if the body
+		// claims a 2xx-class responseCode.
+		return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w", err)
 	}
 	if parsed.AccessToken == "" {
 		return accessTokenResponse{}, errors.New("snap: token manager: response has no accessToken")

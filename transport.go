@@ -17,10 +17,18 @@ const defaultHTTPTimeout = 30 * time.Second
 // misbehaving or malicious server can't force unbounded memory use.
 const maxResponseBytes = 10 << 20 // 10 MiB
 
-// Envelope is the generic decoded response body for a SNAP request. Phase 1
-// has no per-service typed responses yet, so callers unmarshal Raw
-// themselves once they know which service they called.
+// Envelope is the generic decoded response body for a SNAP request, plus
+// the transport-level HTTP status. Per-service bindings (in this same
+// package) unmarshal Raw into their own typed response.
+//
+// StatusCode matters because ResponseCode is only reliable when the server
+// actually returned SNAP's own error shape — a body from a proxy, WAF, or
+// gateway in front of it may carry no ResponseCode at all. A per-service
+// binding with no ResponseCode to fall back on should use
+// sentinelForHTTPStatus(env.StatusCode) in that case, the same pattern
+// TokenManager already uses internally.
 type Envelope struct {
+	StatusCode      int
 	ResponseCode    string
 	ResponseMessage string
 	Raw             json.RawMessage
@@ -70,10 +78,21 @@ func (t *Transport) Do(ctx context.Context, hb HeaderBuilder) (Envelope, error) 
 		ResponseMessage string `json:"responseMessage"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			// A non-JSON body (HTML WAF page, empty body from a load
+			// balancer, etc.) on a non-2xx response must still be
+			// errors.Is-matchable via the HTTP status, not just an opaque
+			// decode error — this is the same proxy/WAF/gateway case
+			// Envelope.StatusCode exists for, just reached from the parse
+			// failure path instead of a successfully-parsed empty
+			// responseCode.
+			return Envelope{}, fmt.Errorf("snap: transport: %w: http status %d: decode response body: %w", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode, err)
+		}
 		return Envelope{}, fmt.Errorf("snap: transport: decode response body: %w", err)
 	}
 
 	return Envelope{
+		StatusCode:      resp.StatusCode,
 		ResponseCode:    parsed.ResponseCode,
 		ResponseMessage: parsed.ResponseMessage,
 		Raw:             json.RawMessage(body),

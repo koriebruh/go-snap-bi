@@ -67,7 +67,7 @@ func TestResponseCodeError(t *testing.T) {
 		{name: "500 internal server error", code: "5007400", wantErrIs: ErrInternalServerError},
 		{name: "503 service unavailable", code: "5037300", wantErrIs: ErrServiceUnavailable},
 		{name: "504 timeout", code: "5041100", wantErrIs: ErrTimeout},
-		{name: "unmapped class", code: "2000000", wantErrIs: errUnmappedResponseCode},
+		{name: "unmapped class", code: "2000000", wantErrIs: ErrUnmappedResponseCode},
 	}
 
 	for _, tt := range tests {
