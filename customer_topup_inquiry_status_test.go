@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -175,6 +176,33 @@ func TestCustomerTopUpInquiryStatus_MandatoryFieldAlwaysSerialized(t *testing.T)
 	}
 	if v != "" {
 		t.Errorf(`wire body["serviceCode"] = %v, want ""`, v)
+	}
+}
+
+// TestCustomerTopUpInquiryStatus_MalformedAdditionalInfoIsMarshalError
+// pins that a json.RawMessage field holding invalid JSON fails at
+// json.Marshal, and that CustomerTopUpInquiryStatus surfaces that as
+// an error without sending any HTTP request.
+func TestCustomerTopUpInquiryStatus_MalformedAdditionalInfoIsMarshalError(t *testing.T) {
+	var requested atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested.Store(true)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2003900","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/customer-top-up-inquiry-status"
+	tr := &Transport{}
+	_, err := CustomerTopUpInquiryStatus(context.Background(), tr, hb, CustomerTopUpInquiryStatusRequest{
+		AdditionalInfo: json.RawMessage(`{`),
+	})
+	if err == nil {
+		t.Fatal("CustomerTopUpInquiryStatus() error = nil, want non-nil for malformed AdditionalInfo JSON")
+	}
+	if requested.Load() {
+		t.Error("CustomerTopUpInquiryStatus() sent an HTTP request despite a request-encoding failure")
 	}
 }
 
