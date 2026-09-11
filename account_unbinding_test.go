@@ -106,6 +106,44 @@ func TestAccountUnbinding_RequestBodyRoundTrips(t *testing.T) {
 	}
 }
 
+func TestAccountUnbinding_MerchantIDAlwaysSerialized(t *testing.T) {
+	var mu sync.Mutex
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		mu.Lock()
+		gotBody = b
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2000900","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/registration-account-unbinding"
+	tr := &Transport{}
+	if _, err := AccountUnbinding(context.Background(), tr, hb, AccountUnbindingRequest{}); err != nil {
+		t.Fatalf("AccountUnbinding() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	var got map[string]any
+	if err := json.Unmarshal(gotBody, &got); err != nil {
+		t.Fatalf("decode request body the server received: %v", err)
+	}
+	merchantID, ok := got["merchantId"]
+	if !ok {
+		t.Fatal(`wire body missing "merchantId" key; MerchantID lacks omitempty and must always be present, even as ""`)
+	}
+	if merchantID != "" {
+		t.Errorf(`wire body["merchantId"] = %v, want ""`, merchantID)
+	}
+}
+
 func TestAccountUnbinding_NonTwoXXResponseCodeIsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

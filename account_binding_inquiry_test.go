@@ -56,8 +56,32 @@ func TestAccountBindingInquiry_ParsesResponse(t *testing.T) {
 	if !reflect.DeepEqual(resp, want) {
 		t.Errorf("AccountBindingInquiry() = %+v, want %+v", resp, want)
 	}
-	if resp.AccountTransactionLimit != "1000000" {
-		t.Errorf("AccountTransactionLimit = %q, want a Go string matching the quoted wire value, not a decoded number", resp.AccountTransactionLimit)
+}
+
+// TestAccountBindingInquiry_UnquotedTransactionLimitFailsDecodeCleanly
+// documents a known risk of typing AccountTransactionLimit as string: the
+// Guides tab labels it Numeric, and this package trusts a single portal
+// worked example that renders it quoted. If some issuer instead sends an
+// unquoted JSON number, decode fails for the whole response (not just this
+// field) — this test pins that the failure is a clean wrapped decode error,
+// not silent corruption or a partially-populated response being returned
+// as if it were valid.
+func TestAccountBindingInquiry_UnquotedTransactionLimitFailsDecodeCleanly(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2000800","responseMessage":"ok","accountTransactionLimit":1000000}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/registration-account-inquiry"
+	tr := &Transport{}
+	resp, err := AccountBindingInquiry(context.Background(), tr, hb, AccountBindingInquiryRequest{})
+	if err == nil {
+		t.Fatalf("AccountBindingInquiry() error = nil, want non-nil for an unquoted numeric accountTransactionLimit; got %+v", resp)
+	}
+	if !reflect.DeepEqual(resp, AccountBindingInquiryResponse{}) {
+		t.Errorf("AccountBindingInquiry() response = %+v, want zero value on decode failure", resp)
 	}
 }
 

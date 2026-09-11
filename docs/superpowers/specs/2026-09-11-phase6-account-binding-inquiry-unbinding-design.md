@@ -97,10 +97,18 @@ collision risk, so no prefix is needed on any field or type here.
 
 ## Testing
 
-5 tests per endpoint (10 total), the same standing-requirement pattern used
-since Phase 2: full-struct response DeepEqual, request wire round-trip,
+6 tests per endpoint (12 total) — the five core tests Phase 2 established
+(full-struct response DeepEqual, request wire round-trip,
 non-2xx-responseCode, non-2xx-status-with-2xx-body,
-2xx-status-with-no-responseCode. Account Binding Inquiry's response test
-additionally pins `accountTransactionLimit`'s wire shape (`"1000000"` as a
-Go `string`, not a JSON number) since that's this phase's one
-worked-example-confirmed ambiguous field.
+2xx-status-with-no-responseCode) plus one 6th test per endpoint pinning its
+own risk, the same way Phase 4 and Phase 5 each added a 6th test for their
+respective ambiguous/mandatory field:
+
+- Account Binding Inquiry: a decode-failure test for `accountTransactionLimit`
+  sent as an unquoted JSON number instead of the portal's documented
+  quoted-string wire shape — confirms the failure is a clean wrapped error,
+  not silent corruption, since the Guides tab's "Numeric" label leaves that
+  shape possible for some issuer even though the worked example is quoted.
+- Account Unbinding: a `MerchantID`-always-serialized test, identical in
+  shape to Phase 5's `TestAccountBinding_MerchantIDAlwaysSerialized`, since
+  `MerchantID` is likewise the one request field without `omitempty`.
