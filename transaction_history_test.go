@@ -51,32 +51,37 @@ func TestTransactionHistoryList_ParsesWorkedExampleResponse(t *testing.T) {
 		t.Fatalf("TransactionHistoryList() error = %v", err)
 	}
 
-	if resp.ResponseCode != "2001200" {
-		t.Errorf("ResponseCode = %q, want %q", resp.ResponseCode, "2001200")
-	}
-	if resp.ReferenceNo != "2020102977770000000009" {
-		t.Errorf("ReferenceNo = %q, want %q", resp.ReferenceNo, "2020102977770000000009")
-	}
-	if resp.PartnerReferenceNo != "2020102900000000000001" {
-		t.Errorf("PartnerReferenceNo = %q, want %q", resp.PartnerReferenceNo, "2020102900000000000001")
-	}
-	if len(resp.DetailData) != 1 {
-		t.Fatalf("len(DetailData) = %d, want 1", len(resp.DetailData))
-	}
-	want := TransactionDetail{
-		DateTime: "2019-07-03T12:08:56+07:00",
-		Amount:   Money{Value: "12345678.00", Currency: "IDR"},
-		Remark:   "Payment to Warung Ikan Bakar",
-		SourceOfFunds: []SourceOfFund{
-			{Source: "BALANCE", Amount: Money{Value: "10000.00", Currency: "IDR"}},
+	// Compare the entire decoded response against a literal expected value —
+	// not a hand-picked subset of fields — so a typo'd json tag on any
+	// field, including responseMessage, can't pass silently. reflect.DeepEqual
+	// (not !=) because AdditionalInfo is a json.RawMessage ([]byte).
+	want := TransactionHistoryListResponse{
+		ResponseCode:       "2001200",
+		ResponseMessage:    "Request has been processed successfully",
+		ReferenceNo:        "2020102977770000000009",
+		PartnerReferenceNo: "2020102900000000000001",
+		DetailData: []TransactionDetail{
+			{
+				DateTime: "2019-07-03T12:08:56+07:00",
+				Amount:   Money{Value: "12345678.00", Currency: "IDR"},
+				Remark:   "Payment to Warung Ikan Bakar",
+				SourceOfFunds: []SourceOfFund{
+					{Source: "BALANCE", Amount: Money{Value: "10000.00", Currency: "IDR"}},
+				},
+				Status: "SUCCESS",
+				Type:   "PAYMENT",
+			},
 		},
-		Status: "SUCCESS",
-		Type:   "PAYMENT",
 	}
-	got := resp.DetailData[0]
-	got.AdditionalInfo = nil
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("DetailData[0] = %+v, want %+v", got, want)
+	// AdditionalInfo is absent from the fixture at both levels; zero it on
+	// the decoded value so a nil-vs-empty-RawMessage mismatch (an encoding
+	// quirk, not a bug) doesn't fail the comparison.
+	resp.AdditionalInfo = nil
+	if len(resp.DetailData) == 1 {
+		resp.DetailData[0].AdditionalInfo = nil
+	}
+	if !reflect.DeepEqual(resp, want) {
+		t.Errorf("TransactionHistoryList() = %+v, want %+v", resp, want)
 	}
 }
 
@@ -119,6 +124,12 @@ func TestTransactionHistoryList_RequestBodyRoundTrips(t *testing.T) {
 	if got["partnerReferenceNo"] != "ref-1" {
 		t.Errorf(`wire body["partnerReferenceNo"] = %v, want "ref-1"`, got["partnerReferenceNo"])
 	}
+	if got["fromDateTime"] != "2019-07-03T12:08:56+07:00" {
+		t.Errorf(`wire body["fromDateTime"] = %v, want "2019-07-03T12:08:56+07:00"`, got["fromDateTime"])
+	}
+	if got["toDateTime"] != "2019-07-04T12:08:56+07:00" {
+		t.Errorf(`wire body["toDateTime"] = %v, want "2019-07-04T12:08:56+07:00"`, got["toDateTime"])
+	}
 	if got["pageSize"] != "10" {
 		t.Errorf(`wire body["pageSize"] = %v (type %T), want string "10"`, got["pageSize"], got["pageSize"])
 	}
@@ -144,6 +155,27 @@ func TestTransactionHistoryList_NonTwoXXResponseCodeIsError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrBadRequest) {
 		t.Errorf("TransactionHistoryList() error = %v, want errors.Is(err, ErrBadRequest)", err)
+	}
+}
+
+// TestTransactionHistoryList_TwoXXStatusWithNoResponseCodeIsError is the
+// binding-level regression test for a santa-loop finding: the "HTTP 200,
+// but the JSON body itself carries no responseCode" path had never been
+// exercised at HTTP 200 anywhere in the package (every other
+// no-responseCode test pairs it with a non-2xx status).
+func TestTransactionHistoryList_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"detailData":[]}`)) // valid JSON, no responseCode field
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transaction-history-list"
+	tr := &Transport{}
+	resp, err := TransactionHistoryList(context.Background(), tr, hb, TransactionHistoryListRequest{})
+	if err == nil {
+		t.Fatalf("TransactionHistoryList() error = nil, want non-nil; got zero-value response = %+v", resp)
 	}
 }
 

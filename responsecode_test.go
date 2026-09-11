@@ -95,3 +95,47 @@ func TestResponseCodeError(t *testing.T) {
 		}
 	})
 }
+
+// TestCheckResponseStatus directly exercises every branch of
+// checkResponseStatus, including the 2xx-HTTP-status paths that no
+// httptest-based binding test reaches (every existing non-2xx-responseCode
+// test also happens to send a matching non-2xx HTTP status, and the only
+// no-responseCode fixture is served with a non-2xx status too — so the
+// "HTTP 200 but the body itself signals an error" and "HTTP 200 with no
+// responseCode at all" branches were previously dead code as far as the
+// test suite could tell, a santa-loop finding: statement coverage on the
+// final `return envelopeError(...)` line looked like 100% because it always
+// executes and returns nil on every existing test, never proving it can
+// also return non-nil).
+func TestCheckResponseStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		responseCode string
+		httpStatus   int
+		wantErr      bool
+		wantErrIs    error // nil means don't check errors.Is, just non-nil/nil
+	}{
+		{"2xx status, 2xx-class code: success", "2001200", 200, false, nil},
+		{"2xx status, empty code: success (mandatory-field check is the caller's job)", "", 200, false, nil},
+		{"2xx status, malformed code: error", "abc", 200, true, nil},
+		{"2xx status, 4xx-class code in body: error, not silently accepted", "4001200", 200, true, ErrBadRequest},
+		{"non-2xx status, matching non-2xx code: error via envelopeError", "4001200", 400, true, ErrBadRequest},
+		{"non-2xx status, empty code: error via status fallback", "", 500, true, ErrInternalServerError},
+		{"non-2xx status, 2xx-class code in body: transport status wins, error", "2001200", 500, true, ErrInternalServerError},
+		{"non-2xx status, malformed code: error", "abc", 500, true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkResponseStatus(tt.responseCode, tt.httpStatus)
+			if tt.wantErr && err == nil {
+				t.Fatalf("checkResponseStatus(%q, %d) = nil, want non-nil", tt.responseCode, tt.httpStatus)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("checkResponseStatus(%q, %d) = %v, want nil", tt.responseCode, tt.httpStatus, err)
+			}
+			if tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs) {
+				t.Errorf("checkResponseStatus(%q, %d) = %v, want errors.Is match for %v", tt.responseCode, tt.httpStatus, err, tt.wantErrIs)
+			}
+		})
+	}
+}

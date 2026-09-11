@@ -199,6 +199,28 @@ func TestBalanceInquiry_NonTwoXXWithNoResponseCodeIsError(t *testing.T) {
 	}
 }
 
+// TestBalanceInquiry_TwoXXStatusWithNoResponseCodeIsError is the binding-
+// level regression test for a santa-loop finding: the "HTTP 200, but the
+// JSON body itself carries no responseCode" path was previously reachable
+// only in theory — every other no-responseCode test in the package pairs
+// it with a non-2xx HTTP status, so this exact branch (the final guard in
+// BalanceInquiry, checkResponseStatus's 2xx passthrough) had never once
+// been exercised at HTTP 200.
+func TestBalanceInquiry_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// No WriteHeader call: httptest defaults to 200.
+		_, _ = w.Write([]byte(`{"accountNo":"123"}`)) // valid JSON, no responseCode field
+	}))
+	defer server.Close()
+
+	tr := &Transport{}
+	resp, err := BalanceInquiry(context.Background(), tr, testHeaderBuilder(server.URL), BalanceInquiryRequest{AccountNo: "123"})
+	if err == nil {
+		t.Fatalf("BalanceInquiry() error = nil, want non-nil; got zero-value response = %+v", resp)
+	}
+}
+
 // TestBalanceInquiry_NonTwoXXStatusWithTwoXXBodyIsError is the regression
 // test for a santa-loop round-3 HIGH finding: an HTTP 500 (or any non-2xx
 // status) whose body claims a 2xx-class responseCode — e.g. a stale cached
