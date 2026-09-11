@@ -42,20 +42,29 @@ type AccountCreationRequest struct {
 }
 
 // AccountCreationResponse is the response body for API Account Creation.
-// APIKey is typed string, not a numeric type, even though the standard's
-// Guides table labels it "Numeric" — no length or range is given, and
-// treating an opaque identifier as a numeric type risks silent precision
-// loss or a false range assumption for what is not an arithmetic value.
+// APIKey is typed json.RawMessage, not string or a numeric type: the
+// standard's Guides table labels it "Numeric" with no worked example to
+// confirm whether the server actually quotes it as JSON, and no fixed type
+// dominates both possibilities — a numeric type rejects a quoted value,
+// while a plain string field fails the ENTIRE decode (discarding
+// ReferenceNo/AccountID/AuthCode too) if the server sends it unquoted, for
+// what is a non-idempotent operation where the account may already exist.
+// json.RawMessage accepts either wire shape without loss; a caller strips
+// surrounding quotes themselves if the value is quoted.
 type AccountCreationResponse struct {
 	ResponseCode       string          `json:"responseCode"`
 	ResponseMessage    string          `json:"responseMessage"`
 	ReferenceNo        string          `json:"referenceNo,omitempty"`
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	AuthCode           string          `json:"authCode,omitempty"`
-	APIKey             string          `json:"apiKey,omitempty"`
+	APIKey             json.RawMessage `json:"apiKey,omitempty"`
 	AccountID          string          `json:"accountId,omitempty"`
-	State              string          `json:"state,omitempty"`
-	AdditionalInfo     json.RawMessage `json:"additionalInfo,omitempty"`
+	// State is an opaque echo of the request's State (a CSRF-protection
+	// nonce for the OAuth-style flow this endpoint is part of). This
+	// package returns it unexamined; the caller is responsible for
+	// comparing it against the value it sent before acting on the result.
+	State          string          `json:"state,omitempty"`
+	AdditionalInfo json.RawMessage `json:"additionalInfo,omitempty"`
 }
 
 // AccountCreation calls the SNAP Account Creation endpoint (Service Code

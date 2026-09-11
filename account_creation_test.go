@@ -12,6 +12,11 @@ import (
 	"testing"
 )
 
+// fixture is hand-built, not a captured worked example: the design doc
+// records that none was available in the portal's Code Snippets tab for
+// this endpoint at research time. The apiKey field's quoting here is an
+// assumption, not observed wire data — see TestAccountCreation_APIKeyAcceptsEitherWireShape,
+// which is why APIKey is typed json.RawMessage rather than string.
 func TestAccountCreation_ParsesResponse(t *testing.T) {
 	const fixture = `{
    "responseCode":"2000600",
@@ -46,13 +51,53 @@ func TestAccountCreation_ParsesResponse(t *testing.T) {
 		ReferenceNo:        "2020102977770000000009",
 		PartnerReferenceNo: "2020102900000000000001",
 		AuthCode:           "authcode-123",
-		APIKey:             "998877",
+		APIKey:             json.RawMessage(`"998877"`),
 		AccountID:          "account-456",
 		State:              "csrf-state-789",
 		AdditionalInfo:     json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if !reflect.DeepEqual(resp, want) {
 		t.Errorf("AccountCreation() = %+v, want %+v", resp, want)
+	}
+}
+
+// TestAccountCreation_APIKeyAcceptsEitherWireShape is the regression test
+// for a santa-loop finding: the standard's Guides table labels apiKey
+// "Numeric" with no worked example to confirm whether the server quotes it
+// as a JSON string. A plain string field would hard-fail the entire decode
+// (discarding ReferenceNo/AccountID/AuthCode too) for an unquoted numeric
+// value, on a non-idempotent operation where the account may already exist
+// server-side. json.RawMessage tolerates either shape.
+func TestAccountCreation_APIKeyAcceptsEitherWireShape(t *testing.T) {
+	tests := []struct {
+		name       string
+		apiKeyJSON string
+	}{
+		{"quoted string", `"998877"`},
+		{"unquoted number", `998877`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"responseCode":"2000600","responseMessage":"ok","accountId":"account-456","apiKey":`+tt.apiKeyJSON+`}`)
+			}))
+			defer server.Close()
+
+			hb := testHeaderBuilder(server.URL)
+			hb.EndpointURL = server.URL + "/v1.0/registration-account-creation"
+			tr := &Transport{}
+			resp, err := AccountCreation(context.Background(), tr, hb, AccountCreationRequest{})
+			if err != nil {
+				t.Fatalf("AccountCreation() error = %v, want nil — apiKey shape must not break the whole decode", err)
+			}
+			if resp.AccountID != "account-456" {
+				t.Errorf("AccountID = %q, want %q (lost due to a decode failure elsewhere in the struct)", resp.AccountID, "account-456")
+			}
+			if string(resp.APIKey) != tt.apiKeyJSON {
+				t.Errorf("APIKey = %s, want %s", resp.APIKey, tt.apiKeyJSON)
+			}
+		})
 	}
 }
 
