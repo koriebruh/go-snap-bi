@@ -39,6 +39,9 @@ Path `.../{version}/account-inquiry-internal`. POST.
 | currency | String(3) | O | `string` |
 | additionalInfo | Object | O | `json.RawMessage` |
 
+`beneficiaryAccountType`'s worked example value is `"D"` (research §5.1
+records a "D"/"S" enum).
+
 ## Endpoint 2: External Account Inquiry (Service Code 16)
 
 Path `.../{version}/account-inquiry-external`. POST. Same shape as
@@ -63,20 +66,26 @@ Two new files, each following the Phase 2-9 shape exactly:
 - `account_inquiry_external.go`: `AccountInquiryExternalRequest`,
   `AccountInquiryExternalResponse`, `AccountInquiryExternal(ctx, t, hb, req)`.
 
-Both are pure inquiry (read) calls — no resource is minted and the
-group-level response-code table's duplicate-detection notes apply only
-to mutating calls, so neither gets a non-idempotency doc comment.
+Neither function carries a non-idempotency doc comment, matching
+BalanceInquiry, TransactionHistoryList, AccountBindingInquiry, and
+CardRegistrationInquiry — the note appears only on
+account_creation.go, card_registration.go, account_unbinding.go,
+card_registration_unbinding.go, and verify_otp.go, and on none of the
+package's inquiry endpoints.
 
 ## Testing (mechanical precedent checks)
 
 - `BeneficiaryAccountNo` is the sole mandatory request field without
-  `omitempty` on `AccountInquiryInternalRequest`; `BeneficiaryAccountNo`
-  and `BeneficiaryBankCode` are the two on `AccountInquiryExternalRequest`
-  — each gets an `AlwaysSerialized` test per the package's established
-  convention.
+  `omitempty` on `AccountInquiryInternalRequest` — gets a dedicated
+  `AlwaysSerialized` test per the package's established convention.
+- `BeneficiaryAccountNo` and `BeneficiaryBankCode` are the two mandatory
+  fields on `AccountInquiryExternalRequest` — covered by one
+  `TestAccountInquiryExternal_MandatoryFieldsAlwaysSerialized` test,
+  mirroring `TestCardRegistration_MandatoryFieldsAlwaysSerialized` (the
+  package's precedent for a struct with two such fields).
 - Every response struct field appears in each endpoint's
   `ParsesResponse` fixture.
 - Standard 5-test core pattern (full-struct response DeepEqual, request
   wire round-trip, non-2xx-responseCode, non-2xx-status-with-2xx-body,
   2xx-status-with-no-responseCode) per endpoint, plus the
-  AlwaysSerialized test(s) above: 6 tests for Internal, 7 for External.
+  AlwaysSerialized test(s) above: 6 tests for Internal, 6 for External.

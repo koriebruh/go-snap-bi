@@ -92,6 +92,9 @@ func TestAccountInquiryExternal_RequestBodyRoundTrips(t *testing.T) {
 	if err := json.Unmarshal(gotBody, &got); err != nil {
 		t.Fatalf("decode request body the server received: %v", err)
 	}
+	if got["partnerReferenceNo"] != "2020102900000000000001" {
+		t.Errorf(`wire body["partnerReferenceNo"] = %v, want "2020102900000000000001"`, got["partnerReferenceNo"])
+	}
 	if got["beneficiaryAccountNo"] != "1234567890" {
 		t.Errorf(`wire body["beneficiaryAccountNo"] = %v, want "1234567890"`, got["beneficiaryAccountNo"])
 	}
@@ -104,11 +107,11 @@ func TestAccountInquiryExternal_RequestBodyRoundTrips(t *testing.T) {
 	}
 }
 
-// TestAccountInquiryExternal_BeneficiaryAccountNoAlwaysSerialized and
-// TestAccountInquiryExternal_BeneficiaryBankCodeAlwaysSerialized pin that
-// each mandatory request field without omitempty is always present on
-// the wire, even as "", mirroring TestAccountBinding_MerchantIDAlwaysSerialized.
-func TestAccountInquiryExternal_BeneficiaryAccountNoAlwaysSerialized(t *testing.T) {
+// TestAccountInquiryExternal_MandatoryFieldsAlwaysSerialized pins that
+// BeneficiaryAccountNo and BeneficiaryBankCode — the two request fields
+// without omitempty — are always present on the wire, even as "",
+// mirroring TestCardRegistration_MandatoryFieldsAlwaysSerialized.
+func TestAccountInquiryExternal_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 	var mu sync.Mutex
 	var gotBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -137,50 +140,15 @@ func TestAccountInquiryExternal_BeneficiaryAccountNoAlwaysSerialized(t *testing.
 	if err := json.Unmarshal(gotBody, &got); err != nil {
 		t.Fatalf("decode request body the server received: %v", err)
 	}
-	beneficiaryAccountNo, ok := got["beneficiaryAccountNo"]
-	if !ok {
-		t.Fatal(`wire body missing "beneficiaryAccountNo" key; BeneficiaryAccountNo lacks omitempty and must always be present, even as ""`)
-	}
-	if beneficiaryAccountNo != "" {
-		t.Errorf(`wire body["beneficiaryAccountNo"] = %v, want ""`, beneficiaryAccountNo)
-	}
-}
-
-func TestAccountInquiryExternal_BeneficiaryBankCodeAlwaysSerialized(t *testing.T) {
-	var mu sync.Mutex
-	var gotBody []byte
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("read request body: %v", err)
+	for _, key := range []string{"beneficiaryAccountNo", "beneficiaryBankCode"} {
+		v, ok := got[key]
+		if !ok {
+			t.Errorf(`wire body missing %q key; want it always present, even as ""`, key)
+			continue
 		}
-		mu.Lock()
-		gotBody = b
-		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"responseCode":"2001600","responseMessage":"ok"}`))
-	}))
-	defer server.Close()
-
-	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/account-inquiry-external"
-	tr := &Transport{}
-	if _, err := AccountInquiryExternal(context.Background(), tr, hb, AccountInquiryExternalRequest{}); err != nil {
-		t.Fatalf("AccountInquiryExternal() error = %v", err)
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	var got map[string]any
-	if err := json.Unmarshal(gotBody, &got); err != nil {
-		t.Fatalf("decode request body the server received: %v", err)
-	}
-	beneficiaryBankCode, ok := got["beneficiaryBankCode"]
-	if !ok {
-		t.Fatal(`wire body missing "beneficiaryBankCode" key; BeneficiaryBankCode lacks omitempty and must always be present, even as ""`)
-	}
-	if beneficiaryBankCode != "" {
-		t.Errorf(`wire body["beneficiaryBankCode"] = %v, want ""`, beneficiaryBankCode)
+		if v != "" {
+			t.Errorf(`wire body[%q] = %v, want ""`, key, v)
+		}
 	}
 }
 
