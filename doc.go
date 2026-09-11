@@ -38,6 +38,9 @@
 //     (docs/superpowers/specs/2026-09-11-phase18-bulk-cashin-design.md)
 //   - TransferToBankAccountInquiry, TransferToBankPayment
 //     (docs/superpowers/specs/2026-09-11-phase19-transfer-to-bank-design.md)
+//   - TransferToOTCCreatePayment, TransferToOTCTransferStatus,
+//     TransferToOTCCancelPayment
+//     (docs/superpowers/specs/2026-09-11-phase20-transfer-to-otc-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See
