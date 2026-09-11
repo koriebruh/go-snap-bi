@@ -23,8 +23,8 @@ type AccountInquiryInternalResponse struct {
 	ResponseMessage          string          `json:"responseMessage"`
 	ReferenceNo              string          `json:"referenceNo,omitempty"`
 	PartnerReferenceNo       string          `json:"partnerReferenceNo,omitempty"`
-	BeneficiaryAccountName   string          `json:"beneficiaryAccountName,omitempty"`
-	BeneficiaryAccountNo     string          `json:"beneficiaryAccountNo,omitempty"`
+	BeneficiaryAccountName   string          `json:"beneficiaryAccountName"`
+	BeneficiaryAccountNo     string          `json:"beneficiaryAccountNo"`
 	BeneficiaryAccountStatus string          `json:"beneficiaryAccountStatus,omitempty"`
 	BeneficiaryAccountType   string          `json:"beneficiaryAccountType,omitempty"`
 	Currency                 string          `json:"currency,omitempty"`

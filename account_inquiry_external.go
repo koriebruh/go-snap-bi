@@ -24,8 +24,8 @@ type AccountInquiryExternalResponse struct {
 	ResponseMessage        string          `json:"responseMessage"`
 	ReferenceNo            string          `json:"referenceNo,omitempty"`
 	PartnerReferenceNo     string          `json:"partnerReferenceNo,omitempty"`
-	BeneficiaryAccountName string          `json:"beneficiaryAccountName,omitempty"`
-	BeneficiaryAccountNo   string          `json:"beneficiaryAccountNo,omitempty"`
+	BeneficiaryAccountName string          `json:"beneficiaryAccountName"`
+	BeneficiaryAccountNo   string          `json:"beneficiaryAccountNo"`
 	BeneficiaryBankName    string          `json:"beneficiaryBankName,omitempty"`
 	Currency               string          `json:"currency,omitempty"`
 	AdditionalInfo         json.RawMessage `json:"additionalInfo,omitempty"`

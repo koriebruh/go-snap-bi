@@ -22,7 +22,8 @@ func TestAccountInquiryInternal_ParsesResponse(t *testing.T) {
    "beneficiaryAccountNo":"1234567890",
    "beneficiaryAccountStatus":"Active",
    "beneficiaryAccountType":"D",
-   "currency":"IDR"
+   "currency":"IDR",
+   "additionalInfo":{"channel":"mobilephone"}
 }`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -48,6 +49,7 @@ func TestAccountInquiryInternal_ParsesResponse(t *testing.T) {
 		BeneficiaryAccountStatus: "Active",
 		BeneficiaryAccountType:   "D",
 		Currency:                 "IDR",
+		AdditionalInfo:           json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if !reflect.DeepEqual(resp, want) {
 		t.Errorf("AccountInquiryInternal() = %+v, want %+v", resp, want)

@@ -21,7 +21,8 @@ func TestAccountInquiryExternal_ParsesResponse(t *testing.T) {
    "beneficiaryAccountName":"John Doe",
    "beneficiaryAccountNo":"1234567890",
    "beneficiaryBankName":"Bank Example",
-   "currency":"IDR"
+   "currency":"IDR",
+   "additionalInfo":{"channel":"mobilephone"}
 }`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -49,6 +50,7 @@ func TestAccountInquiryExternal_ParsesResponse(t *testing.T) {
 		BeneficiaryAccountNo:   "1234567890",
 		BeneficiaryBankName:    "Bank Example",
 		Currency:               "IDR",
+		AdditionalInfo:         json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if !reflect.DeepEqual(resp, want) {
 		t.Errorf("AccountInquiryExternal() = %+v, want %+v", resp, want)
