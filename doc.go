@@ -29,6 +29,8 @@
 //     VANotifyPaymentIntrabank, VAGetReport (completes the Virtual
 //     Account sub-group)
 //     (docs/superpowers/specs/2026-09-11-phase15-virtual-account-intrabank-report-design.md)
+//   - TransactionStatusInquiryBank
+//     (docs/superpowers/specs/2026-09-11-phase16-transaction-status-inquiry-bank-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See
