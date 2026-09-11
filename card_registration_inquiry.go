@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strings"
 )
 
 // custIDMerchantPattern is an allowlist, not a denylist, for
@@ -63,33 +62,44 @@ type CardRegistrationInquiryResponse struct {
 // CardRegistrationInquiry sets itself: Method to GET and Body to nil,
 // since this is the package's only read-only GET endpoint and a caller
 // should not need to configure protocol details specific to it.
-// hb.EndpointURL must be a bare URL with no query string or fragment —
-// CardRegistrationInquiry rejects one that has either, rather than
-// silently mishandling it (a fragment is never transmitted by net/http
-// at all, so appending after one would silently drop custIDMerchant from
-// the actual request with no error).
+// hb.EndpointURL must be an absolute URL with a host and no query string
+// or fragment — CardRegistrationInquiry rejects one that isn't, rather
+// than silently mishandling it (e.g. a fragment is never transmitted by
+// net/http at all, so appending after one would silently drop
+// custIDMerchant from the actual request with no error).
 //
 // custIDMerchant is validated against custIDMerchantPattern (see its doc
-// comment) and then percent-encoded via url.PathEscape before being
-// parsed back into the URL — this is the package's first caller input
-// that reaches a URL path rather than a JSON body, and the first place
-// this package parses a URL rather than building one by concatenation,
-// specifically so a caller's EndpointURL ending in any number of slashes
-// still produces exactly one before "custIdMerchant".
+// comment), then joined onto hb.EndpointURL's path via url.URL.JoinPath
+// — this is the package's first caller input that reaches a URL path
+// rather than a JSON body, and the first place this package parses a URL
+// rather than building one by concatenation. JoinPath (not manual
+// string-building on u.Path, and NOT a separate url.PathEscape call,
+// which would double-escape) both collapses any number of slashes
+// between EndpointURL and "custIdMerchant" to exactly one, and preserves
+// any percent-encoding already present in EndpointURL's path — an
+// earlier version of this function cleared u.RawPath to force
+// re-derivation from the decoded u.Path, which silently turned an
+// encoded "%2F"/"%2E%2E" already in the caller's own EndpointURL into a
+// real path boundary before the request was ever sent.
 func CardRegistrationInquiry(ctx context.Context, t *Transport, hb HeaderBuilder, custIDMerchant string) (CardRegistrationInquiryResponse, error) {
 	if !custIDMerchantPattern.MatchString(custIDMerchant) {
 		return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid custIdMerchant %q", custIDMerchant)
 	}
 
-	u, err := url.Parse(hb.EndpointURL)
-	if err != nil {
-		return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid EndpointURL: %w", err)
+	u, perr := url.Parse(hb.EndpointURL)
+	if perr != nil {
+		// Deliberately don't wrap the raw *url.Error: its Error() string
+		// reprints the input URL verbatim, which could carry userinfo
+		// credentials if a caller ever put one in EndpointURL.
+		if urlErr, ok := perr.(*url.Error); ok {
+			return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid EndpointURL: %w", urlErr.Err)
+		}
+		return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid EndpointURL: %w", perr)
 	}
-	if u.RawQuery != "" || u.Fragment != "" {
-		return CardRegistrationInquiryResponse{}, errors.New("snap: card registration inquiry: EndpointURL must not contain a query string or fragment")
+	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.Host == "" {
+		return CardRegistrationInquiryResponse{}, errors.New("snap: card registration inquiry: EndpointURL must be an absolute URL with a host and no query string or fragment")
 	}
-	u.Path = strings.TrimRight(u.Path, "/") + "/custIdMerchant/" + custIDMerchant
-	u.RawPath = ""
+	u = u.JoinPath("custIdMerchant", custIDMerchant)
 
 	hb.Method = http.MethodGet
 	hb.Body = nil

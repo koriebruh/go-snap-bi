@@ -84,16 +84,23 @@ with nowhere to put a JSON tag. The function:
    character set every worked identifier in the standard actually uses
    closes the whole class in one guard instead of enumerating variants.
 3. Parses `hb.EndpointURL` with `url.Parse` — rejecting one with a
-   non-empty query string or fragment — rather than concatenating
-   strings onto it. This is also a santa-loop finding: string
-   concatenation onto an `EndpointURL` ending in a fragment (`#...`)
-   silently dropped `custIDMerchant` from the transmitted request
-   (`net/http` never transmits a URL fragment), and one ending in a
-   query string moved the segment into the query instead of the path —
-   neither produced an error. Trims any trailing `/` from the parsed
-   path (not the whole string) before appending
-   `"/custIdMerchant/" + custIDMerchant`, so a caller's `EndpointURL`
-   ending in any number of slashes still produces exactly one.
+   non-empty query string, `ForceQuery`, fragment, `Opaque`, or empty
+   `Host` — rather than concatenating strings onto it. This is also a
+   santa-loop finding, in two rounds: string concatenation onto an
+   `EndpointURL` ending in a fragment (`#...`) silently dropped
+   `custIDMerchant` from the transmitted request (`net/http` never
+   transmits a URL fragment), and one ending in a query string moved the
+   segment into the query instead of the path — neither produced an
+   error. The first fix parsed the URL but still built the new path by
+   hand (`u.Path = trimmed + "/custIdMerchant/" + custIDMerchant`) and
+   cleared `u.RawPath` to force re-derivation from the decoded `Path` —
+   which silently turned a `%2F`/`%2E%2E` already present in the
+   *caller's own* `EndpointURL` into a real path boundary, reopening the
+   exact traversal class step 2 closed, one field over. The fix uses
+   `u.JoinPath("custIdMerchant", custIDMerchant)` instead: it collapses
+   any number of slashes to exactly one, and — critically — leaves
+   `RawPath` alone, so a caller's own percent-encoding is preserved
+   rather than decoded and reassembled.
 4. Calls `t.Do` and decodes exactly like every other binding
    (`checkResponseStatus`, decode, reject empty `responseCode`).
 
@@ -102,7 +109,7 @@ idempotency note.
 
 ## Testing
 
-10 tests: full-struct response DeepEqual (nested `accountList`), a
+12 tests: full-struct response DeepEqual (nested `accountList`), a
 URL-construction test (asserting the exact request wire path via
 `r.URL.EscapedPath()` for a valid `custIDMerchant`), a
 rejected-`custIDMerchant` table test (`""`, `"."`, `".."`, a `/`-bearing
@@ -110,9 +117,13 @@ value, a multi-segment traversal attempt, a backslash variant, a
 percent-encoded `..`, invalid UTF-8, a Unicode dot lookalike, and a
 `?`-bearing value — all rejected before any request is sent, closing
 the allowlist boundary both review rounds found gaps in), a
-query-or-fragment-`EndpointURL`-rejection test, a trailing-slash test
+query-or-fragment-`EndpointURL`-rejection test (including a bare `?`,
+which has an empty `RawQuery` but a set `ForceQuery`), an
+opaque-or-hostless-`EndpointURL`-rejection test, a trailing-slash test
 (a caller's `EndpointURL` ending in `/` still produces one, not two,
-slashes before `custIdMerchant`), a signature-correctness test
+slashes before `custIdMerchant`), an encoded-path-preservation test (a
+caller's `EndpointURL` already containing `%2F`/`%2E%2E` must reach the
+wire unchanged, not decoded and reassembled), a signature-correctness test
 (recomputes `BuildStringToSignTransaction` from the server-observed
 timestamp and compares against the received `X-SIGNATURE`, closing the
 one part of this GET-shaped request no other test exercises),

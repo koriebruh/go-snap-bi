@@ -97,13 +97,18 @@ func TestCardRegistrationInquiry_URLConstruction(t *testing.T) {
 // and one carrying a query string moved the segment into RawQuery
 // instead of Path — neither produced an error, both produced a request
 // to the wrong resource. Parsing hb.EndpointURL and rejecting either
-// case outright closes both silently-wrong outcomes.
+// case outright closes both silently-wrong outcomes. "?" alone
+// (ForceQuery, an empty query string) and an opaque/hostless URL are
+// included since both bypass a naive RawQuery/Fragment-only check.
 func TestCardRegistrationInquiry_RejectsQueryOrFragmentEndpointURL(t *testing.T) {
-	for _, suffix := range []string{"?trace=1", "#frag"} {
+	for _, suffix := range []string{"?trace=1", "#frag", "?"} {
 		t.Run(suffix, func(t *testing.T) {
+			var mu sync.Mutex
 			called := false
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
 				called = true
+				mu.Unlock()
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"responseCode":"2000300","responseMessage":"ok"}`))
 			}))
@@ -116,6 +121,8 @@ func TestCardRegistrationInquiry_RejectsQueryOrFragmentEndpointURL(t *testing.T)
 			if err == nil {
 				t.Fatalf("CardRegistrationInquiry() error = nil, want non-nil for EndpointURL ending in %q", suffix)
 			}
+			mu.Lock()
+			defer mu.Unlock()
 			if called {
 				t.Error("CardRegistrationInquiry() reached the server despite an invalid EndpointURL; want the request never sent")
 			}
@@ -236,6 +243,59 @@ func TestCardRegistrationInquiry_TrimsTrailingSlashOnEndpointURL(t *testing.T) {
 	want := "/v1.0/registration-card-inquiry/custIdMerchant/cust-1"
 	if gotEscapedPath != want {
 		t.Errorf("request wire path = %q, want %q (a trailing slash on the caller's EndpointURL must not produce a double slash)", gotEscapedPath, want)
+	}
+}
+
+// TestCardRegistrationInquiry_PreservesEncodedEndpointURLPath is the
+// regression test for a santa-loop finding: an earlier version cleared
+// url.URL.RawPath to force re-derivation from the decoded Path, which
+// silently turned a "%2F"/"%2E%2E" already present in the CALLER'S OWN
+// EndpointURL into a real path boundary — reopening, one field over, the
+// exact traversal class custIDMerchant's allowlist was built to close.
+// JoinPath must preserve the caller's existing encoding untouched.
+func TestCardRegistrationInquiry_PreservesEncodedEndpointURLPath(t *testing.T) {
+	var mu sync.Mutex
+	var gotEscapedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotEscapedPath = r.URL.EscapedPath()
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2000300","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/seg%2F%2E%2Epart"
+	tr := &Transport{}
+	if _, err := CardRegistrationInquiry(context.Background(), tr, hb, "cust-1"); err != nil {
+		t.Fatalf("CardRegistrationInquiry() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	want := "/v1.0/seg%2F%2E%2Epart/custIdMerchant/cust-1"
+	if gotEscapedPath != want {
+		t.Errorf("request wire path = %q, want %q (a caller's already-encoded EndpointURL path must not be decoded and re-normalized)", gotEscapedPath, want)
+	}
+}
+
+// TestCardRegistrationInquiry_RejectsOpaqueOrHostlessEndpointURL is the
+// regression test for a santa-loop finding: an EndpointURL like
+// "https:host/v1.0/reg" (a single missing slash) parses with a non-empty
+// Opaque and an empty Path/Host, so JoinPath's appended segment is
+// silently dropped from the URL entirely rather than producing an error.
+func TestCardRegistrationInquiry_RejectsOpaqueOrHostlessEndpointURL(t *testing.T) {
+	for _, endpointURL := range []string{"https:host/v1.0/reg", ""} {
+		t.Run(endpointURL, func(t *testing.T) {
+			hb := testHeaderBuilder("http://unused.invalid")
+			hb.EndpointURL = endpointURL
+			tr := &Transport{}
+			_, err := CardRegistrationInquiry(context.Background(), tr, hb, "cust-1")
+			if err == nil {
+				t.Fatalf("CardRegistrationInquiry() error = nil, want non-nil for EndpointURL = %q", endpointURL)
+			}
+		})
 	}
 }
 
