@@ -23,6 +23,8 @@
 //     (docs/superpowers/specs/2026-09-11-phase12-trigger-transfer-rfp-bulk-rtgs-sknbi-design.md)
 //   - CreateVA, UpdateVA, UpdateStatusVA, InquiryVA, DeleteVA
 //     (docs/superpowers/specs/2026-09-11-phase13-virtual-account-management-design.md)
+//   - VAInquiry, VAPayment, VAInquiryStatus
+//     (docs/superpowers/specs/2026-09-11-phase14-virtual-account-transaction-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See
