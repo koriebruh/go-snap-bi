@@ -18,6 +18,9 @@
 //   - VerifyOTP, CardRegistrationUnbinding, OTP (docs/superpowers/specs/2026-09-11-phase9-verify-otp-unbinding-otp-design.md)
 //   - AccountInquiryInternal, AccountInquiryExternal (docs/superpowers/specs/2026-09-11-phase10-account-inquiry-design.md)
 //   - IntrabankTransfer, InterbankTransfer (docs/superpowers/specs/2026-09-11-phase11-trigger-transfer-intrabank-interbank-design.md)
+//   - RequestForPayment, InterbankBulkTransfer, RTGSTransfer, SKNBITransfer,
+//     plus inbound-only notification types for the latter three
+//     (docs/superpowers/specs/2026-09-11-phase12-trigger-transfer-rfp-bulk-rtgs-sknbi-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See

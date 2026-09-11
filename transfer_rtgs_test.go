@@ -1,0 +1,249 @@
+package snap
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"sync"
+	"testing"
+)
+
+func TestRTGSTransfer_ParsesResponse(t *testing.T) {
+	const fixture = `{
+   "responseCode":"2002200",
+   "responseMessage":"Request has been processed successfully",
+   "referenceNo":"2020102977770000000009",
+   "partnerReferenceNo":"2020102900000000000001",
+   "amount":{"value":"50000.00","currency":"IDR"},
+   "beneficiaryAccountNo":"1234567890",
+   "currency":"IDR",
+   "customerReference":"cust-ref-1",
+   "sourceAccountNo":"9876543210",
+   "transactionDate":"2020-12-21T14:56:11+07:00",
+   "traceNo":"TRACE123456",
+   "transactionStatus":"00",
+   "transactionStatusDesc":"Success",
+   "beneficiaryAccountType":"D",
+   "originatorInfos":[{"originatorCustomerNo":"cust-1","originatorCustomerName":"John Doe","originatorBankCode":"014"}],
+   "additionalInfo":{"channel":"mobilephone"}
+}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(fixture))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-rtgs"
+	tr := &Transport{}
+	resp, err := RTGSTransfer(context.Background(), tr, hb, RTGSTransferRequest{
+		PartnerReferenceNo:           "2020102900000000000001",
+		Amount:                       Money{Value: "50000.00", Currency: "IDR"},
+		BeneficiaryAccountNo:         "1234567890",
+		BeneficiaryAccountName:       "Jane Doe",
+		BeneficiaryBankCode:          "014",
+		SourceAccountNo:              "9876543210",
+		TransactionDate:              "2020-12-21T14:56:11+07:00",
+		BeneficiaryCustomerResidence: "1",
+		BeneficiaryCustomerType:      "1",
+	})
+	if err != nil {
+		t.Fatalf("RTGSTransfer() error = %v", err)
+	}
+
+	want := RTGSTransferResponse{
+		ResponseCode:           "2002200",
+		ResponseMessage:        "Request has been processed successfully",
+		ReferenceNo:            "2020102977770000000009",
+		PartnerReferenceNo:     "2020102900000000000001",
+		Amount:                 &Money{Value: "50000.00", Currency: "IDR"},
+		BeneficiaryAccountNo:   "1234567890",
+		Currency:               "IDR",
+		CustomerReference:      "cust-ref-1",
+		SourceAccountNo:        "9876543210",
+		TransactionDate:        "2020-12-21T14:56:11+07:00",
+		TraceNo:                "TRACE123456",
+		TransactionStatus:      "00",
+		TransactionStatusDesc:  "Success",
+		BeneficiaryAccountType: "D",
+		OriginatorInfos: []TransferOriginatorInfo{
+			{OriginatorCustomerNo: "cust-1", OriginatorCustomerName: "John Doe", OriginatorBankCode: "014"},
+		},
+		AdditionalInfo: json.RawMessage(`{"channel":"mobilephone"}`),
+	}
+	if !reflect.DeepEqual(resp, want) {
+		t.Errorf("RTGSTransfer() = %+v, want %+v", resp, want)
+	}
+}
+
+func TestRTGSTransfer_RequestBodyRoundTrips(t *testing.T) {
+	var mu sync.Mutex
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		mu.Lock()
+		gotBody = b
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2002200","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-rtgs"
+	tr := &Transport{}
+	req := RTGSTransferRequest{
+		PartnerReferenceNo:           "2020102900000000000001",
+		Amount:                       Money{Value: "50000.00", Currency: "IDR"},
+		BeneficiaryAccountNo:         "1234567890",
+		BeneficiaryAccountName:       "Jane Doe",
+		BeneficiaryBankCode:          "014",
+		SourceAccountNo:              "9876543210",
+		TransactionDate:              "2020-12-21T14:56:11+07:00",
+		BeneficiaryCustomerResidence: "1",
+		BeneficiaryCustomerType:      "1",
+		Kodepos:                      "12345",
+		ReceiverPhone:                "0812345678",
+		AdditionalInfo:               json.RawMessage(`{"channel":"mobilephone"}`),
+	}
+	if _, err := RTGSTransfer(context.Background(), tr, hb, req); err != nil {
+		t.Fatalf("RTGSTransfer() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	var got map[string]any
+	if err := json.Unmarshal(gotBody, &got); err != nil {
+		t.Fatalf("decode request body the server received: %v", err)
+	}
+	if got["beneficiaryCustomerResidence"] != "1" {
+		t.Errorf(`wire body["beneficiaryCustomerResidence"] = %v, want "1"`, got["beneficiaryCustomerResidence"])
+	}
+	if got["beneficiaryCustomerType"] != "1" {
+		t.Errorf(`wire body["beneficiaryCustomerType"] = %v, want "1"`, got["beneficiaryCustomerType"])
+	}
+	if got["kodepos"] != "12345" {
+		t.Errorf(`wire body["kodepos"] = %v, want "12345"`, got["kodepos"])
+	}
+	if got["receiverPhone"] != "0812345678" {
+		t.Errorf(`wire body["receiverPhone"] = %v, want "0812345678"`, got["receiverPhone"])
+	}
+	amount, ok := got["amount"].(map[string]any)
+	if !ok || amount["value"] != "50000.00" || amount["currency"] != "IDR" {
+		t.Errorf(`wire body["amount"] = %v, want {"value":"50000.00","currency":"IDR"}`, got["amount"])
+	}
+}
+
+// TestRTGSTransfer_MandatoryFieldsAlwaysSerialized pins that
+// PartnerReferenceNo, Amount, BeneficiaryAccountNo,
+// BeneficiaryAccountName, BeneficiaryBankCode, SourceAccountNo,
+// TransactionDate, BeneficiaryCustomerResidence, and
+// BeneficiaryCustomerType — the nine request fields without omitempty —
+// are always present on the wire, even as their zero value.
+func TestRTGSTransfer_MandatoryFieldsAlwaysSerialized(t *testing.T) {
+	var mu sync.Mutex
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		mu.Lock()
+		gotBody = b
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2002200","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-rtgs"
+	tr := &Transport{}
+	if _, err := RTGSTransfer(context.Background(), tr, hb, RTGSTransferRequest{}); err != nil {
+		t.Fatalf("RTGSTransfer() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	var got map[string]any
+	if err := json.Unmarshal(gotBody, &got); err != nil {
+		t.Fatalf("decode request body the server received: %v", err)
+	}
+	for _, key := range []string{"partnerReferenceNo", "beneficiaryAccountNo", "beneficiaryAccountName", "beneficiaryBankCode", "sourceAccountNo", "transactionDate", "beneficiaryCustomerResidence", "beneficiaryCustomerType"} {
+		v, ok := got[key]
+		if !ok {
+			t.Errorf(`wire body missing %q key; want it always present, even as ""`, key)
+			continue
+		}
+		if v != "" {
+			t.Errorf(`wire body[%q] = %v, want ""`, key, v)
+		}
+	}
+	wantAmount := map[string]any{"value": "", "currency": ""}
+	if !reflect.DeepEqual(got["amount"], wantAmount) {
+		t.Errorf(`wire body["amount"] = %v, want %v`, got["amount"], wantAmount)
+	}
+}
+
+func TestRTGSTransfer_NonTwoXXResponseCodeIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"responseCode":"4002200","responseMessage":"Bad Request"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-rtgs"
+	tr := &Transport{}
+	_, err := RTGSTransfer(context.Background(), tr, hb, RTGSTransferRequest{})
+	if err == nil {
+		t.Fatal("RTGSTransfer() error = nil, want non-nil for a non-2xx responseCode")
+	}
+	if !errors.Is(err, ErrBadRequest) {
+		t.Errorf("RTGSTransfer() error = %v, want errors.Is(err, ErrBadRequest)", err)
+	}
+}
+
+func TestRTGSTransfer_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"responseCode":"2002200","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-rtgs"
+	tr := &Transport{}
+	resp, err := RTGSTransfer(context.Background(), tr, hb, RTGSTransferRequest{})
+	if err == nil {
+		t.Fatalf("RTGSTransfer() error = nil, want non-nil for HTTP 500 with a 2xx-shaped body; got %+v", resp)
+	}
+	if !errors.Is(err, ErrInternalServerError) {
+		t.Errorf("RTGSTransfer() error = %v, want errors.Is(err, ErrInternalServerError)", err)
+	}
+}
+
+func TestRTGSTransfer_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"beneficiaryAccountNo":"1234567890"}`)) // valid JSON, no responseCode field
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-rtgs"
+	tr := &Transport{}
+	resp, err := RTGSTransfer(context.Background(), tr, hb, RTGSTransferRequest{})
+	if err == nil {
+		t.Fatalf("RTGSTransfer() error = nil, want non-nil; got zero-value response = %+v", resp)
+	}
+}
