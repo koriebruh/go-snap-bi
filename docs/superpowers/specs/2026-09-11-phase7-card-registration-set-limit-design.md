@@ -133,11 +133,18 @@ tests established since Phase 2, plus for each endpoint:
   the captured wire body rather than a decode outcome.
 - One encode-failure test per `json.RawMessage` field for an unquoted
   value that is not valid JSON on its own (a formatted decimal for
-  `limit`, an unquoted base64 blob for `cardData`), confirming the
-  failure is a clean encode error before any request is sent, not a
-  silent pass-through — a santa-loop round-1 finding: an earlier doc
-  comment claimed this failure mode was silent, which running
-  `json.Marshal` against the exact worked examples disproved.
+  `limit`, an unquoted base64 blob starting with a letter for
+  `cardData`), confirming the failure is a clean encode error before any
+  request is sent. This is only ONE of two behaviors, not the whole
+  story: the wire-shape test's own "unquoted number" row shows that an
+  unquoted *bare-digit* `limit` (the portal worked example's own value,
+  `1000000`) marshals fine and reaches the wire as a bare JSON number —
+  silently diverging from the worked example's quoted-string shape, with
+  no error at all. Two santa-loop rounds were needed to land this
+  correctly: round 1 fixed a doc comment that claimed getting the shape
+  wrong was never silent; round 2 caught that the round-1 fix still
+  overclaimed, since it's only non-silent when the unquoted value isn't
+  itself valid JSON.
 - A mandatory-fields-always-serialized test (`bankCardNo`/`custIdMerchant`
   for Card Registration, `bankCardToken` for Set Limit), mirroring
   `TestAccountBinding_MerchantIDAlwaysSerialized`.

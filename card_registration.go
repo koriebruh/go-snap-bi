@@ -20,15 +20,20 @@ import (
 // json.RawMessage(`"1000000"`), not json.RawMessage(limitStr), and
 // json.RawMessage(`"`+cardDataBase64+`"`), not
 // json.RawMessage(cardDataBase64) — to match the worked examples' wire
-// shape. Getting this wrong is not silent: neither a base64 blob (its '/'
-// and '+' characters) nor a formatted decimal (e.g. "1,000,000") is valid
-// JSON on its own, so an unquoted assignment fails json.Marshal and
-// CardRegistration returns an "encode request" error before any request
-// is sent. Two other shapes are worth knowing: an empty json.RawMessage
-// is dropped by omitempty (the field is absent from the wire body, not
-// sent empty), while json.RawMessage("null") is NOT dropped — it is sent
-// as an explicit "limit":null / "cardData":null, since omitempty only
-// skips a zero-length slice.
+// shape. Getting this wrong is NOT always caught by json.Marshal: if the
+// unquoted value happens to itself be valid JSON (e.g. Limit set to the
+// bare digits 1000000, or a numeric-looking CardData), it marshals fine
+// as that JSON type and is sent as a bare number/object — silently
+// diverging from the worked example's quoted-string shape, with no
+// error. Only a value that is not valid JSON on its own (a
+// comma-formatted decimal, a base64 blob starting with a letter, or any
+// other string that isn't itself a JSON number/object/literal) fails
+// json.Marshal and returns an "encode request" error before any request
+// is sent. Two other shapes: an empty json.RawMessage is dropped by
+// omitempty (the field is absent from the wire body, not sent empty),
+// while json.RawMessage("null") is NOT dropped — it is sent as an
+// explicit "limit":null / "cardData":null, since omitempty only skips a
+// zero-length slice.
 type CardRegistrationRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	AccountName        string          `json:"accountName,omitempty"`

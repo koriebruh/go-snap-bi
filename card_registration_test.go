@@ -126,7 +126,7 @@ func TestCardRegistration_LimitAndCardDataAcceptEitherWireShape(t *testing.T) {
 		cardData string
 	}{
 		{"quoted string", `"1000000"`, `"encrypted-blob"`},
-		{"unquoted number", `1000000`, `{"k":"v"}`},
+		{"unquoted number and bare object", `1000000`, `{"k":"v"}`},
 		{"json null", `null`, `null`},
 	}
 	for _, tt := range tests {
@@ -175,12 +175,14 @@ func TestCardRegistration_LimitAndCardDataAcceptEitherWireShape(t *testing.T) {
 	}
 }
 
-// TestCardRegistration_NonNumericUnquotedLimitFailsEncode pins the
-// non-silent failure mode CardRegistrationRequest's doc comment warns
-// about: an unquoted string that isn't a bare JSON number (e.g. a
-// formatted "1,000,000") is not valid JSON on its own, so json.Marshal
-// fails and CardRegistration returns an encode error before any request
-// reaches the server — it does not silently reach the wire.
+// TestCardRegistration_NonNumericUnquotedLimitFailsEncode pins one of the
+// two failure modes CardRegistrationRequest's doc comment warns about: a
+// comma-formatted decimal like "1,000,000" is not valid JSON on its own
+// (unlike a bare digit string, which the "unquoted number and bare
+// object" case above marshals fine and sends as-is, silently), so
+// json.Marshal fails and
+// CardRegistration returns an encode error before any request reaches
+// the server.
 func TestCardRegistration_NonNumericUnquotedLimitFailsEncode(t *testing.T) {
 	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -209,8 +211,10 @@ func TestCardRegistration_NonNumericUnquotedLimitFailsEncode(t *testing.T) {
 
 // TestCardRegistration_InvalidCardDataFailsEncode mirrors
 // TestCardRegistration_NonNumericUnquotedLimitFailsEncode for CardData:
-// a base64 blob (containing '/' and '+') assigned unquoted is not valid
-// JSON on its own, so json.Marshal fails and the request is never sent.
+// a base64 blob starting with a letter is not a valid JSON value token
+// (not because of any specific character in it — an all-digit blob would
+// marshal fine as a bare number instead, silently), so json.Marshal fails
+// on this one and the request is never sent.
 func TestCardRegistration_InvalidCardDataFailsEncode(t *testing.T) {
 	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
