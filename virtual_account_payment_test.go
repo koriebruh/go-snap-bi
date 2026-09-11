@@ -191,6 +191,33 @@ func TestVAPayment_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 	}
 }
 
+// TestVAPayment_MalformedPaymentTypeIsMarshalError pins that a
+// json.RawMessage field holding invalid JSON fails at json.Marshal, and
+// that VAPayment surfaces that as an error without sending any HTTP
+// request.
+func TestVAPayment_MalformedPaymentTypeIsMarshalError(t *testing.T) {
+	var requested bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2002500","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/payment"
+	tr := &Transport{}
+	_, err := VAPayment(context.Background(), tr, hb, VAPaymentRequest{
+		PaymentType: json.RawMessage(`{`),
+	})
+	if err == nil {
+		t.Fatal("VAPayment() error = nil, want non-nil for malformed PaymentType JSON")
+	}
+	if requested {
+		t.Error("VAPayment() sent an HTTP request despite a request-encoding failure")
+	}
+}
+
 func TestVAPayment_NonTwoXXResponseCodeIsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

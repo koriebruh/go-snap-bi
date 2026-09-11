@@ -88,4 +88,8 @@ func TestVAInquiryStatusData_MirrorsVAPaymentDataPlusTransactionDate(t *testing.
 	if td != wantTD {
 		t.Errorf("VAInquiryStatusData.TransactionDate = %+v, want %+v", td, wantTD)
 	}
+
+	if want, got := len(paymentFields)+1, len(statusFields); got != want {
+		t.Errorf("VAInquiryStatusData has %d fields, want %d (VAPaymentData's %d + TransactionDate) — an unrelated field added to VAInquiryStatusData would otherwise pass this test silently", got, want, len(paymentFields))
+	}
 }

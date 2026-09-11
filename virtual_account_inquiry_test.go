@@ -219,6 +219,34 @@ func TestVAInquiry_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 	}
 }
 
+// TestVAInquiry_MalformedCustomerNoIsMarshalError pins that a
+// json.RawMessage field holding invalid JSON fails at json.Marshal
+// (encoding/json validates RawMessage content when marshaling the
+// enclosing struct), and that VAInquiry surfaces that as an error
+// without sending any HTTP request.
+func TestVAInquiry_MalformedCustomerNoIsMarshalError(t *testing.T) {
+	var requested bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2002400","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry"
+	tr := &Transport{}
+	_, err := VAInquiry(context.Background(), tr, hb, VAInquiryRequest{
+		CustomerNo: json.RawMessage(`{`),
+	})
+	if err == nil {
+		t.Fatal("VAInquiry() error = nil, want non-nil for malformed CustomerNo JSON")
+	}
+	if requested {
+		t.Error("VAInquiry() sent an HTTP request despite a request-encoding failure")
+	}
+}
+
 func TestVAInquiry_NonTwoXXResponseCodeIsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
