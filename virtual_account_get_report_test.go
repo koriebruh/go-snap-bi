@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -73,6 +74,64 @@ func TestVAGetReport_ParsesResponse(t *testing.T) {
 	}
 	if !reflect.DeepEqual(resp, want) {
 		t.Errorf("VAGetReport() = %+v, want %+v", resp, want)
+	}
+}
+
+// TestVAGetReport_UsesPOSTMethod pins that VAGetReport sets hb.Method
+// to POST regardless of what the caller configured — this is the one
+// VA endpoint where the source spec contradicts itself (GET per the
+// Guides tab, POST-with-body per the code snippet), and the package
+// has chosen POST, so the method is not caller-configurable.
+func TestVAGetReport_UsesPOSTMethod(t *testing.T) {
+	var mu sync.Mutex
+	var gotMethod string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotMethod = r.Method
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2003500","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.Method = http.MethodGet
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	tr := &Transport{}
+	if _, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{}); err != nil {
+		t.Fatalf("VAGetReport() error = %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gotMethod != http.MethodPost {
+		t.Errorf("request method = %q, want %q", gotMethod, http.MethodPost)
+	}
+}
+
+// TestVAGetReport_MalformedPartnerServiceIDIsMarshalError pins that a
+// json.RawMessage field holding invalid JSON fails at json.Marshal,
+// and that VAGetReport surfaces that as an error without sending any
+// HTTP request.
+func TestVAGetReport_MalformedPartnerServiceIDIsMarshalError(t *testing.T) {
+	var requested atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested.Store(true)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2003500","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	tr := &Transport{}
+	_, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{
+		PartnerServiceID: json.RawMessage(`{`),
+	})
+	if err == nil {
+		t.Fatal("VAGetReport() error = nil, want non-nil for malformed PartnerServiceID JSON")
+	}
+	if requested.Load() {
+		t.Error("VAGetReport() sent an HTTP request despite a request-encoding failure")
 	}
 }
 

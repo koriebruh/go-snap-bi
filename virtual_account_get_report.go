@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 // GetReportRequest is the request body for API VA - Get Report
@@ -70,16 +71,27 @@ type GetReportResponse struct {
 }
 
 // VAGetReport calls the SNAP VA - Get Report endpoint (Service Code
-// 35, path .../{version}/transfer-va/get-report, HTTP POST — see the
-// type comment above regarding the GET/POST contradiction). hb must
-// already carry every field HeaderBuilder needs except Body, which
-// VAGetReport sets itself so the exact marshaled bytes are used for
-// both signing and the wire body.
+// 35, path .../{version}/transfer-va/get-report). hb must already
+// carry every field HeaderBuilder needs except Method and Body:
+// VAGetReport sets Method to POST itself — this is the one VA endpoint
+// where the source spec contradicts itself (GET per the Guides tab,
+// POST-with-body per the code snippet), and the package has chosen
+// POST (see the type comment above), so the method is not
+// caller-configurable, the same way the PUT/DELETE endpoints in Phase
+// 13 fix their own method — and Body, so the exact marshaled bytes are
+// used for both signing and the wire body.
+//
+// A report covering a wide date range can return an unbounded number
+// of array entries; the shared transport layer caps every response
+// body at 10 MiB (see transport.go), so callers pulling large reports
+// should page by narrower date/time ranges rather than one unbounded
+// call.
 func VAGetReport(ctx context.Context, t *Transport, hb HeaderBuilder, req GetReportRequest) (GetReportResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return GetReportResponse{}, fmt.Errorf("snap: va get report: encode request: %w", err)
 	}
+	hb.Method = http.MethodPost
 	hb.Body = body
 
 	env, err := t.Do(ctx, hb)

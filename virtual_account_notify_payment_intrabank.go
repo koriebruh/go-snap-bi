@@ -63,6 +63,10 @@ type VANotifyPaymentIntrabankResponse struct {
 // method override). hb must already carry every field HeaderBuilder
 // needs except Body, which VANotifyPaymentIntrabank sets itself so the
 // exact marshaled bytes are used for both signing and the wire body.
+//
+// This operation is not idempotent and this package does not retry.
+// Callers that retry a failed or timed-out call should reuse the same
+// X-EXTERNAL-ID, since the server's own duplicate-detection keys on it.
 func VANotifyPaymentIntrabank(ctx context.Context, t *Transport, hb HeaderBuilder, req VANotifyPaymentIntrabankRequest) (VANotifyPaymentIntrabankResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
