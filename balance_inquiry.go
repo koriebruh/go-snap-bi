@@ -8,8 +8,9 @@ import (
 )
 
 // Money is the shared {value, currency} amount shape used across every
-// per-service response that carries a monetary value. value is a decimal
-// string (e.g. "200000.00"); currency is ISO 4217 (e.g. "IDR").
+// per-service request or response that carries a monetary value. value
+// is a decimal string (e.g. "200000.00"); currency is ISO 4217 (e.g.
+// "IDR").
 type Money struct {
 	Value    string `json:"value"`
 	Currency string `json:"currency"`

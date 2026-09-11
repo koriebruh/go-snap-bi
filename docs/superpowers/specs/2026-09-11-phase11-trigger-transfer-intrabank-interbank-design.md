@@ -9,12 +9,13 @@ Source: `docs/research/2026-09-11-transfer-kredit-portal-research.md` §5.2.
 
 The `amount`-shaped `{value, currency}` object reuses the existing
 `Money` type from `balance_inquiry.go` (Phase 2) rather than
-introducing a new type — `Money`'s own doc comment already declares it
-"the shared {value, currency} amount shape used across every
-per-service response that carries a monetary value", and
-`transaction_history.go` already reuses it (Phase 3's design doc:
-"Reuses Money from Phase 2"). Research §3's `Amount` object matches
-`Money` field-for-field.
+introducing a new type — `transaction_history.go` already reuses it
+(Phase 3's design doc: "Reuses Money from Phase 2"). Research §3's
+`Amount` object matches `Money` field-for-field. This phase is the
+package's first request-side use of `Money` (every prior use —
+`AccountInfo`, `TransactionDetail`, `SourceOfFund` — is response-side),
+so `Money`'s doc comment in `balance_inquiry.go` has been widened from
+"per-service response" to "per-service request or response" to match.
 
 `TransferOriginatorInfo` is new this phase — no existing type in the
 package matches its shape — defined once in `transfer_shared_types.go`
@@ -63,8 +64,7 @@ after that (`amount`, `beneficiaryAccountNo`, `currency`,
 `originatorInfos`, `additionalInfo`) is listed with no M/O marker in the
 source. Recorded here as unmarked, not asserted as Optional — the code
 treats them as Optional (`omitempty`) as the safe default absent a
-stated marker, consistent with every other unmarked trailing field the
-package has encountered so far.
+stated marker.
 
 | Field | Type | M/O (source marking) | Go type |
 |---|---|---|---|
@@ -82,9 +82,9 @@ package has encountered so far.
 | additionalInfo | Object | unmarked | `json.RawMessage` |
 
 `ReferenceNo` is Conditional per the Guides tab; per the package's
-established convention (e.g. Phase 9's `CardRegistrationUnbindingResponse`
-Conditional fields), Conditional response fields carry `omitempty` the
-same as Optional.
+established convention (Phase 9's design doc: "referenceNo C fields
+elsewhere" carry `omitempty` the same as Optional), Conditional
+response fields carry `omitempty` the same as Optional.
 
 `Amount` is `Money` (plain struct, always sent) on the Mandatory
 request field and `*Money` (pointer, `omitempty`) on the response
@@ -110,7 +110,7 @@ Adds `traceNo String(16) O`.
 
 ## Design
 
-Two new files:
+Three new files:
 
 - `transfer_shared_types.go`: `TransferOriginatorInfo` — no functions,
   just the shared struct.
