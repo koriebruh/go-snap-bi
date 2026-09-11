@@ -63,15 +63,18 @@ func TestDeleteVA_ParsesResponse(t *testing.T) {
 // request still carries a JSON body (this DELETE ships a body, no path
 // parameters, per the research doc).
 func TestDeleteVA_UsesDELETEMethod(t *testing.T) {
+	var mu sync.Mutex
 	var gotMethod string
 	var gotBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotMethod = r.Method
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Errorf("read request body: %v", err)
 		}
+		mu.Lock()
+		gotMethod = r.Method
 		gotBody = b
+		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"responseCode":"2003100","responseMessage":"ok"}`))
 	}))
@@ -83,6 +86,8 @@ func TestDeleteVA_UsesDELETEMethod(t *testing.T) {
 	if _, err := DeleteVA(context.Background(), tr, hb, DeleteVARequest{VirtualAccountNo: "1234598765"}); err != nil {
 		t.Fatalf("DeleteVA() error = %v", err)
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	if gotMethod != http.MethodDelete {
 		t.Errorf("request method = %q, want %q", gotMethod, http.MethodDelete)
 	}

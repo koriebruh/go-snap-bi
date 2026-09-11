@@ -23,7 +23,10 @@ func TestCreateVA_ParsesResponse(t *testing.T) {
       "virtualAccountName":"Jane Doe",
       "trxId":"trx-1",
       "totalAmount":{"value":"100000.00","currency":"IDR"},
+      "billDetails":[{"billCode":"01","billNo":"bill-1"}],
+      "freeTexts":[{"english":"note","indonesia":"catatan"}],
       "virtualAccountTrxType":"C",
+      "feeAmount":{"value":"1000.00","currency":"IDR"},
       "expiredDate":"2020-12-21T14:56:11+07:00",
       "additionalInfo":{"channel":"mobilephone"}
    }
@@ -55,7 +58,10 @@ func TestCreateVA_ParsesResponse(t *testing.T) {
 			VirtualAccountName:    "Jane Doe",
 			TrxID:                 "trx-1",
 			TotalAmount:           &Money{Value: "100000.00", Currency: "IDR"},
+			BillDetails:           []BillDetail{{BillCode: "01", BillNo: "bill-1"}},
+			FreeTexts:             []LocalizedText{{English: "note", Indonesia: "catatan"}},
 			VirtualAccountTrxType: "C",
+			FeeAmount:             &Money{Value: "1000.00", Currency: "IDR"},
 			ExpiredDate:           "2020-12-21T14:56:11+07:00",
 			AdditionalInfo:        json.RawMessage(`{"channel":"mobilephone"}`),
 		},

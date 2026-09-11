@@ -65,9 +65,12 @@ func TestUpdateStatusVA_ParsesResponse(t *testing.T) {
 // TestUpdateStatusVA_UsesPUTMethod pins that UpdateStatusVA sets
 // hb.Method to PUT regardless of what the caller configured.
 func TestUpdateStatusVA_UsesPUTMethod(t *testing.T) {
+	var mu sync.Mutex
 	var gotMethod string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		gotMethod = r.Method
+		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"responseCode":"2002900","responseMessage":"ok"}`))
 	}))
@@ -79,6 +82,8 @@ func TestUpdateStatusVA_UsesPUTMethod(t *testing.T) {
 	if _, err := UpdateStatusVA(context.Background(), tr, hb, UpdateStatusVARequest{}); err != nil {
 		t.Fatalf("UpdateStatusVA() error = %v", err)
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	if gotMethod != http.MethodPut {
 		t.Errorf("request method = %q, want %q", gotMethod, http.MethodPut)
 	}
