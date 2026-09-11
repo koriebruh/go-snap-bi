@@ -113,7 +113,7 @@ func TestCardRegistrationInquiry_RejectsInvalidEndpointURL(t *testing.T) {
 		{"query string", func(base string) string { return base + "?trace=1" }},
 		{"fragment", func(base string) string { return base + "#frag" }},
 		{"force query, no value", func(base string) string { return base + "?" }},
-		{"opaque (missing slash after scheme)", func(base string) string { return "https:host" + base[len("https://host"):] }},
+		{"opaque (missing slash after scheme)", func(base string) string { return strings.Replace(base, "://", ":", 1) }},
 		{"non-http(s) scheme", func(base string) string { return "ftp" + base[len("http"):] }},
 		{"scheme-relative (no scheme)", func(base string) string { return base[len("http:"):] }},
 		{"userinfo", func(base string) string {
