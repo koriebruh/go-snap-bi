@@ -54,6 +54,28 @@ func TestRTGSNotificationRequest_RoundTrips(t *testing.T) {
 		wire["sourceAccountNo"] != "9876543210" || wire["transactionDate"] != "2020-12-21T14:56:11+07:00" {
 		t.Errorf("marshaled request = %v, want every mandatory field present", wire)
 	}
+
+	// A zero-value marshal is the actual omitempty guard: a fully-populated
+	// marshal above would still pass even if a mandatory field regressed to
+	// carrying omitempty, since no field would be empty either way.
+	zb, err := json.Marshal(RTGSNotificationRequest{})
+	if err != nil {
+		t.Fatalf("json.Marshal(zero value) error = %v", err)
+	}
+	var zeroWire map[string]any
+	if err := json.Unmarshal(zb, &zeroWire); err != nil {
+		t.Fatalf("decode marshaled zero-value request: %v", err)
+	}
+	for _, key := range []string{"latestTransactionStatus", "beneficiaryAccountName", "beneficiaryAccountNo", "beneficiaryBankCode", "sourceAccountNo", "transactionDate"} {
+		v, ok := zeroWire[key]
+		if !ok {
+			t.Errorf(`zero-value marshaled request missing %q key; want it always present, even as ""`, key)
+			continue
+		}
+		if v != "" {
+			t.Errorf(`zero-value marshaled request[%q] = %v, want ""`, key, v)
+		}
+	}
 }
 
 func TestRTGSNotificationResponse_RoundTrips(t *testing.T) {

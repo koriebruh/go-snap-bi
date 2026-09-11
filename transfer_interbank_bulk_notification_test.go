@@ -46,6 +46,38 @@ func TestInterbankBulkTransferNotificationRequest_RoundTrips(t *testing.T) {
 	if !ok || item["partnerReferenceNo"] != "pr-1" || item["responseCode"] != "2002100" || item["responseMessage"] != "Success" {
 		t.Errorf("marshaled request bulkObject[0] = %v, want the test's item", bulkObject[0])
 	}
+
+	// A zero-value marshal is the actual omitempty guard: a fully-populated
+	// marshal above would still pass even if a mandatory field regressed to
+	// carrying omitempty. BulkObject is a nil slice without omitempty, which
+	// encoding/json marshals as the JSON literal null, not an empty array —
+	// this pins that actual wire behavior, mirroring
+	// InterbankBulkTransferRequest.BulkObject's same edge case.
+	zb, err := json.Marshal(InterbankBulkTransferNotificationRequest{})
+	if err != nil {
+		t.Fatalf("json.Marshal(zero value) error = %v", err)
+	}
+	var zeroWire map[string]any
+	if err := json.Unmarshal(zb, &zeroWire); err != nil {
+		t.Fatalf("decode marshaled zero-value request: %v", err)
+	}
+	for _, key := range []string{"bulkId", "partnerBulkId"} {
+		v, ok := zeroWire[key]
+		if !ok {
+			t.Errorf(`zero-value marshaled request missing %q key; want it always present, even as ""`, key)
+			continue
+		}
+		if v != "" {
+			t.Errorf(`zero-value marshaled request[%q] = %v, want ""`, key, v)
+		}
+	}
+	zeroBulkObject, ok := zeroWire["bulkObject"]
+	if !ok {
+		t.Fatal(`zero-value marshaled request missing "bulkObject" key; BulkObject lacks omitempty and must always be present`)
+	}
+	if zeroBulkObject != nil {
+		t.Errorf(`zero-value marshaled request["bulkObject"] = %v, want null (nil slice without omitempty)`, zeroBulkObject)
+	}
 }
 
 func TestInterbankBulkTransferNotificationResponse_RoundTrips(t *testing.T) {

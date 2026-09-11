@@ -9,7 +9,8 @@ import "encoding/json"
 // calling function is provided. A caller wires their own HTTP handler
 // for this path, authenticates the inbound call with
 // ServerVerifier.VerifyTransactionRequest, and json.Unmarshals the body
-// into this type.
+// into this type. BulkID, PartnerBulkID, and BulkObject are mandatory
+// per the Guides tab.
 type InterbankBulkTransferNotificationRequest struct {
 	BulkID        string                                  `json:"bulkId"`
 	PartnerBulkID string                                  `json:"partnerBulkId"`
