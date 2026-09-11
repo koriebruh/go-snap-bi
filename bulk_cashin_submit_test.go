@@ -69,8 +69,15 @@ func TestSubmitBulkCashIn_RequestBodyRoundTrips(t *testing.T) {
 	req := SubmitBulkCashInRequest{
 		PartnerBulkID:   "partner-bulk-1",
 		TransactionDate: "2020-12-20T10:00:00+07:00",
+		Currency:        "IDR",
+		FeeType:         "01",
 		BulkObject: []BulkCashInItem{
-			{AccountNumber: "1122334455", PartnerReferenceNo: "ref-1", Amount: &Money{Value: "100000.00", Currency: "IDR"}},
+			{
+				AccountNumber:      "1122334455",
+				AccountName:        "Jane Doe",
+				PartnerReferenceNo: "ref-1",
+				Amount:             &Money{Value: "100000.00", Currency: "IDR"},
+			},
 		},
 	}
 	if _, err := SubmitBulkCashIn(context.Background(), tr, hb, req); err != nil {
@@ -83,6 +90,12 @@ func TestSubmitBulkCashIn_RequestBodyRoundTrips(t *testing.T) {
 	if err := json.Unmarshal(gotBody, &got); err != nil {
 		t.Fatalf("decode request body the server received: %v", err)
 	}
+	if got["currency"] != "IDR" {
+		t.Errorf(`wire body["currency"] = %v, want "IDR"`, got["currency"])
+	}
+	if got["feeType"] != "01" {
+		t.Errorf(`wire body["feeType"] = %v, want "01"`, got["feeType"])
+	}
 	bulkObject, ok := got["bulkObject"].([]any)
 	if !ok || len(bulkObject) != 1 {
 		t.Fatalf(`wire body["bulkObject"] = %v, want a 1-element array`, got["bulkObject"])
@@ -93,6 +106,13 @@ func TestSubmitBulkCashIn_RequestBodyRoundTrips(t *testing.T) {
 	}
 	if item["accountNumber"] != "1122334455" {
 		t.Errorf(`wire body bulkObject[0]["accountNumber"] = %v, want "1122334455"`, item["accountNumber"])
+	}
+	if item["accountName"] != "Jane Doe" {
+		t.Errorf(`wire body bulkObject[0]["accountName"] = %v, want "Jane Doe"`, item["accountName"])
+	}
+	amount, ok := item["amount"].(map[string]any)
+	if !ok || amount["value"] != "100000.00" || amount["currency"] != "IDR" {
+		t.Errorf(`wire body bulkObject[0]["amount"] = %v, want {"value":"100000.00","currency":"IDR"}`, item["amount"])
 	}
 	if item["partnerReferenceNo"] != "ref-1" {
 		t.Errorf(`wire body bulkObject[0]["partnerReferenceNo"] = %v, want "ref-1"`, item["partnerReferenceNo"])

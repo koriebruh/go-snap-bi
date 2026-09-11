@@ -5,7 +5,7 @@ import "encoding/json"
 // BulkCashInNotificationItem is one entry in Notify Bulk Cash In's
 // request "bulkObject[]" array — a settlement-result shape, distinct
 // from BulkCashInItem's transfer-instruction shape (per the "distinct
-// types per service code" convention: this type has 7 fields vs.
+// types per service code" convention: this type has 8 fields vs.
 // Phase 12's InterbankBulkTransferNotificationItem's 3, so it is not a
 // reuse of that type either). CustomerNumber, ReferenceNo,
 // PartnerReferenceNo, ResponseCode, and ResponseMessage are all

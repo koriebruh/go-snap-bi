@@ -10,7 +10,7 @@ func TestNotifyBulkCashInRequest_RoundTrips(t *testing.T) {
 	const fixture = `{
    "bulkId":"BULK000001",
    "partnerBulkId":"partner-bulk-1",
-   "bulkObject":[{"customerNumber":"98765","referenceNo":"ref-1","partnerReferenceNo":"partner-ref-1","responseCode":"2004100","responseMessage":"Success"}]
+   "bulkObject":[{"customerNumber":"98765","customerName":"Jane Doe","amount":{"value":"100000.00","currency":"IDR"},"referenceNo":"ref-1","partnerReferenceNo":"partner-ref-1","responseCode":"2004100","responseMessage":"Success","additionalInfo":{"channel":"mobilephone"}}]
 }`
 	var got NotifyBulkCashInRequest
 	if err := json.Unmarshal([]byte(fixture), &got); err != nil {
@@ -22,10 +22,13 @@ func TestNotifyBulkCashInRequest_RoundTrips(t *testing.T) {
 		BulkObject: []BulkCashInNotificationItem{
 			{
 				CustomerNumber:     "98765",
+				CustomerName:       "Jane Doe",
+				Amount:             &Money{Value: "100000.00", Currency: "IDR"},
 				ReferenceNo:        "ref-1",
 				PartnerReferenceNo: "partner-ref-1",
 				ResponseCode:       "2004100",
 				ResponseMessage:    "Success",
+				AdditionalInfo:     json.RawMessage(`{"channel":"mobilephone"}`),
 			},
 		},
 	}
@@ -51,6 +54,17 @@ func TestNotifyBulkCashInRequest_RoundTrips(t *testing.T) {
 	item, ok := bulkObject[0].(map[string]any)
 	if !ok || item["customerNumber"] != "98765" || item["responseCode"] != "2004100" || item["responseMessage"] != "Success" {
 		t.Errorf("marshaled request bulkObject[0] = %v, want the test's item", bulkObject[0])
+	}
+	if item["customerName"] != "Jane Doe" {
+		t.Errorf(`marshaled request bulkObject[0]["customerName"] = %v, want "Jane Doe"`, item["customerName"])
+	}
+	amount, ok := item["amount"].(map[string]any)
+	if !ok || amount["value"] != "100000.00" || amount["currency"] != "IDR" {
+		t.Errorf(`marshaled request bulkObject[0]["amount"] = %v, want {"value":"100000.00","currency":"IDR"}`, item["amount"])
+	}
+	additionalInfo, ok := item["additionalInfo"].(map[string]any)
+	if !ok || additionalInfo["channel"] != "mobilephone" {
+		t.Errorf(`marshaled request bulkObject[0]["additionalInfo"] = %v, want {"channel":"mobilephone"}`, item["additionalInfo"])
 	}
 
 	// A zero-value marshal is the actual omitempty guard: a
