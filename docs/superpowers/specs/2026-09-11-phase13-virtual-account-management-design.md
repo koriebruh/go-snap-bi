@@ -9,23 +9,33 @@ Source: `docs/research/2026-09-11-transfer-kredit-portal-research.md` §5.3.
 
 ## Known limitation: responseCode as a bare number on Inquiry VA
 
-Research §3.4 records that `responseCode` — String(7) and quoted in
+Research §5.3 records that `responseCode` — String(7) and quoted in
 every other worked example across the whole researched Transfer Kredit
 group — appears unquoted as a bare JSON number in exactly two worked
 responses: Inquiry VA (30, this phase) and Get Report (35, a later
 phase), e.g. `"responseCode":2003000,`.
 
-`responseCode` is decoded once, package-wide, by the shared transport
-layer (`transport.go`) before any per-service `Response` type ever sees
-the body — not by any type introduced in this phase. A server that
-actually sends a bare-number `responseCode` for Inquiry VA fails at
-that shared decode step with a JSON type error, before
-`InquiryVAResponse` is populated at all. Fixing this would mean
-changing the transport layer's `responseCode` decode for every
-endpoint in the package, not a change scoped to Virtual Account —
-out of scope for this phase. `TestInquiryVA_BareNumberResponseCodeIsAKnownLimitation`
-pins the current (failing) behavior explicitly, so this is a recorded,
-tracked gap rather than a silent one.
+`responseCode` is decoded twice for every call in this package: once by
+the shared transport layer (`transport.go`, into an internal
+`string`-typed field) before any per-service `Response` type sees the
+body, and again by each endpoint's own `json.Unmarshal(env.Raw, &resp)`
+into that `Response`'s own `ResponseCode string` field.
+`InquiryVAResponse.ResponseCode` — a type this phase introduces — is
+`string` like every other `Response.ResponseCode` in the package, so a
+server sending a bare-number `responseCode` for Inquiry VA fails at
+the transport layer's decode first (confirmed), and would *also* fail
+at `InquiryVAResponse`'s own decode if the transport layer alone were
+fixed (confirmed by a santa-loop reviewer patching the transport
+decode and observing `InquiryVAResponse.ResponseCode` fail the same
+way). A complete fix means retyping `ResponseCode` on every
+`Response` type across the whole package plus the transport layer's
+internal decode — a package-wide architectural change, not one scoped
+to Virtual Account, and out of scope for this phase.
+`TestInquiryVA_BareNumberResponseCodeIsAKnownLimitation` pins the
+current (failing) behavior; because the failure has two independent
+causes, the test's `err != nil` assertion stays meaningful (and should
+stay failing-shaped) until *both* layers are fixed, not just the
+transport layer.
 
 ## Response envelope shape
 

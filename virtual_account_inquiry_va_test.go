@@ -147,15 +147,20 @@ func TestInquiryVA_BillReferenceNoAcceptsEitherWireShape(t *testing.T) {
 }
 
 // TestInquiryVA_BareNumberResponseCodeIsAKnownLimitation pins a known,
-// recorded limitation: research §3.4 shows Inquiry VA's own worked
+// recorded limitation: research §5.3 shows Inquiry VA's own worked
 // example rendering responseCode as a bare JSON number
 // (`"responseCode":2003000,`), unlike every other endpoint's worked
 // example in the researched Transfer Kredit group. responseCode is
-// decoded once, package-wide, by the shared transport layer before any
-// per-service Response type sees the body, so a real server sending
-// this shape currently fails the whole call — see the Phase 13 design
-// doc's "Known limitation" section. This test documents the current
-// (failing) behavior rather than silently accepting it as correct.
+// decoded twice — once by the shared transport layer, and again by
+// InquiryVAResponse's own decode — and both are typed string like
+// every Response.ResponseCode in the package, so a real server sending
+// this shape fails the call at the transport layer first, and would
+// fail again at InquiryVAResponse's own decode even if the transport
+// layer alone were fixed. See the Phase 13 design doc's "Known
+// limitation" section. This test documents the current (failing)
+// behavior; it stays meaningfully failing-shaped until both decode
+// sites (and, package-wide, every other Response.ResponseCode) are
+// retyped — not just the transport layer.
 func TestInquiryVA_BareNumberResponseCodeIsAKnownLimitation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -168,7 +173,7 @@ func TestInquiryVA_BareNumberResponseCodeIsAKnownLimitation(t *testing.T) {
 	tr := &Transport{}
 	_, err := InquiryVA(context.Background(), tr, hb, InquiryVARequest{})
 	if err == nil {
-		t.Fatal("InquiryVA() error = nil, want non-nil — this pins a known limitation (bare-number responseCode currently breaks the shared transport decode); if this now passes, the limitation has been fixed and this test should be updated to assert success")
+		t.Fatal("InquiryVA() error = nil, want non-nil — this pins a known limitation (bare-number responseCode breaks both the shared transport decode and InquiryVAResponse's own decode); if this now passes, both decode sites have been fixed and this test should be updated to assert success")
 	}
 }
 

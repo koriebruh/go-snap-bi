@@ -48,11 +48,16 @@ type LocalizedText struct {
 // M/O in the source, so all carry omitempty; BillDescription, BillAmount,
 // and Reason are pointers since omitempty has no effect on a
 // non-pointer struct value. BillReferenceNo is documented Numeric in
-// the Guides tab (research §3); per the package's ambiguous-type rule,
+// the Guides tab (research §5.3); per the package's ambiguous-type rule,
 // a documented Numeric field is typed json.RawMessage rather than
 // string, since a plain string field fails the entire decode if any
 // issuer sends it as a bare JSON number, matching the existing
-// AccountTransactionLimit/APIKey precedent.
+// AccountTransactionLimit/APIKey precedent. BillDetail is also used in
+// request bodies (CreateVARequest.BillDetails, UpdateVARequest.BillDetails),
+// so a caller setting BillReferenceNo must supply a complete JSON value
+// (e.g. json.RawMessage(`"BILLREF1"`) or json.RawMessage(`123`)), not a
+// bare Go string — an incomplete value fails json.Marshal for the whole
+// request.
 type BillDetail struct {
 	BillCode        string          `json:"billCode,omitempty"`
 	BillNo          string          `json:"billNo,omitempty"`
