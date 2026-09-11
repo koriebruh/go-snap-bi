@@ -51,7 +51,7 @@ Path `.../{version}/otp-verification`. POST. Confirmed via worked
 | identificationNo | String | O | `string` | |
 | linkageToken | String | O | `string` | |
 | phoneNo | String | O | `string` | |
-| qParamsURL | String | O | `string` | |
+| qParamsURL | String | O | `string` | Wire tag is `qParamsURL` (capital URL), per the portal's own worked example — unlike every other URL field in this package (`redirectUrl`, `merchantLogoUrl`, `pinWebViewUrl`), which use lowercase `Url`. Kept as the source shows it. |
 | qParams | Object | O | `json.RawMessage` | |
 | sendOtpFlag | String | O | `string` | |
 | subscribeDatetime | String | O | `string` | |
@@ -155,9 +155,18 @@ detection on a mutating call, not specifically about minting.
 `CardRegistrationUnbinding` gets the note, matching its exact structural
 sibling `AccountUnbinding`. `OTP` gets the note too: it triggers a real
 external side effect (an OTP delivery), so a retry under a fresh
-X-EXTERNAL-ID risks a duplicate delivery. `VerifyOTP` does not: it
-neither mints a resource nor triggers an external side effect, only
-checks an already-issued OTP.
+X-EXTERNAL-ID risks a duplicate delivery. A santa-loop round-1 finding
+caught that an earlier draft of this paragraph carved `VerifyOTP` out on
+the grounds that it "neither mints a resource nor triggers an external
+side effect" — self-contradicting the rule just stated (the note
+attaches to mutating calls, not specifically to minting or external
+side effects) and factually wrong besides: `VerifyOTP` consumes
+server-side state (it invalidates the OTP and plausibly increments an
+attempt counter) and its own response returns token-shaped fields
+(`bankCardToken`, `linkageToken`). `VerifyOTP` gets the note too, for
+the same reason as `CardRegistrationUnbinding` — a retry under a fresh
+X-EXTERNAL-ID risks burning an extra OTP attempt or re-processing an
+already-completed call.
 
 ## Testing
 

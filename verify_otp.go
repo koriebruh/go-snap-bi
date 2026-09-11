@@ -63,6 +63,14 @@ type VerifyOTPResponse struct {
 // (Service Code 04). hb must already carry every field HeaderBuilder
 // needs except Body, which VerifyOTP sets itself so the exact marshaled
 // bytes are used for both signing and the wire body.
+//
+// This operation consumes server-side state — it invalidates the OTP
+// being verified and, plausibly, increments an attempt counter — so
+// this package treats it as non-idempotent and does not retry. Callers
+// that retry a failed or timed-out call should reuse the same
+// X-EXTERNAL-ID, since the server's own duplicate-detection keys on it;
+// a fresh X-EXTERNAL-ID on retry risks burning an extra OTP attempt or
+// re-processing a call the server already completed.
 func VerifyOTP(ctx context.Context, t *Transport, hb HeaderBuilder, req VerifyOTPRequest) (VerifyOTPResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {

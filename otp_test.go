@@ -76,6 +76,8 @@ func TestOTP_RequestBodyRoundTrips(t *testing.T) {
 		TrxDateTime:        "2020-12-21T14:56:11+07:00",
 		BankCardToken:      "6d7963617264746f6b656e",
 		OTPTrxCode:         "54",
+		OTPReasonCode:      "01",
+		OTPReasonMessage:   "invalid otp",
 		AdditionalInfo:     json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if _, err := OTP(context.Background(), tr, hb, req); err != nil {
@@ -96,6 +98,12 @@ func TestOTP_RequestBodyRoundTrips(t *testing.T) {
 	}
 	if _, ok := got["subMerchantId"]; ok {
 		t.Error(`wire body has "subMerchantId" key, want only "subMerchant" (this endpoint's own field name)`)
+	}
+	if got["otpReasonCode"] != "01" {
+		t.Errorf(`wire body["otpReasonCode"] = %v, want "01"`, got["otpReasonCode"])
+	}
+	if got["otpReasonMessage"] != "invalid otp" {
+		t.Errorf(`wire body["otpReasonMessage"] = %v, want "invalid otp"`, got["otpReasonMessage"])
 	}
 	additionalInfo, ok := got["additionalInfo"].(map[string]any)
 	if !ok || additionalInfo["channel"] != "mobilephone" {
