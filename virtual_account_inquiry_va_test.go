@@ -87,7 +87,7 @@ func TestInquiryVA_ParsesResponse(t *testing.T) {
 				AdditionalInfo:  json.RawMessage(`{"note":"bill-level"}`),
 				BillAmountLabel: "Total",
 				BillAmountValue: "50000.00",
-				BillReferenceNo: "BILLREF1",
+				BillReferenceNo: json.RawMessage(`"BILLREF1"`),
 				Status:          "01",
 				Reason:          &LocalizedText{English: "unpaid", Indonesia: "belum dibayar"},
 			}},
@@ -102,6 +102,73 @@ func TestInquiryVA_ParsesResponse(t *testing.T) {
 	}
 	if !reflect.DeepEqual(resp, want) {
 		t.Errorf("InquiryVA() = %+v, want %+v", resp, want)
+	}
+}
+
+// TestInquiryVA_BillReferenceNoAcceptsEitherWireShape is the regression
+// test for a santa-loop finding: the Guides tab labels billReferenceNo
+// "Number", and while the worked example renders it quoted, SNAP is a
+// multi-PJP standard and one example is thin evidence about what every
+// issuer sends. A plain string field would hard-fail the entire decode
+// (discarding the VA identity, all other bills, etc.) for an unquoted
+// numeric value. json.RawMessage tolerates either shape — same fix,
+// same reasoning, as AccountBindingInquiryResponse.AccountTransactionLimit.
+func TestInquiryVA_BillReferenceNoAcceptsEitherWireShape(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  string
+	}{
+		{"quoted string", `"BILLREF1"`},
+		{"unquoted number", `123456789012345`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"responseCode":"2003000","responseMessage":"ok","virtualAccountData":{"virtualAccountNo":"1234598765","billDetails":[{"billCode":"01","billReferenceNo":`+tt.ref+`}]}}`)
+			}))
+			defer server.Close()
+
+			hb := testHeaderBuilder(server.URL)
+			hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-va"
+			tr := &Transport{}
+			resp, err := InquiryVA(context.Background(), tr, hb, InquiryVARequest{})
+			if err != nil {
+				t.Fatalf("InquiryVA() error = %v, want nil — billReferenceNo's shape must not break the whole decode", err)
+			}
+			if resp.VirtualAccountData == nil || resp.VirtualAccountData.VirtualAccountNo != "1234598765" {
+				t.Errorf("VirtualAccountNo did not survive regardless of billReferenceNo's shape: %+v", resp.VirtualAccountData)
+			}
+			if len(resp.VirtualAccountData.BillDetails) != 1 || string(resp.VirtualAccountData.BillDetails[0].BillReferenceNo) != tt.ref {
+				t.Errorf("BillReferenceNo = %s, want raw bytes %s", resp.VirtualAccountData.BillDetails[0].BillReferenceNo, tt.ref)
+			}
+		})
+	}
+}
+
+// TestInquiryVA_BareNumberResponseCodeIsAKnownLimitation pins a known,
+// recorded limitation: research §3.4 shows Inquiry VA's own worked
+// example rendering responseCode as a bare JSON number
+// (`"responseCode":2003000,`), unlike every other endpoint's worked
+// example in the researched Transfer Kredit group. responseCode is
+// decoded once, package-wide, by the shared transport layer before any
+// per-service Response type sees the body, so a real server sending
+// this shape currently fails the whole call — see the Phase 13 design
+// doc's "Known limitation" section. This test documents the current
+// (failing) behavior rather than silently accepting it as correct.
+func TestInquiryVA_BareNumberResponseCodeIsAKnownLimitation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"responseCode":2003000,"responseMessage":"ok"}`)
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-va"
+	tr := &Transport{}
+	_, err := InquiryVA(context.Background(), tr, hb, InquiryVARequest{})
+	if err == nil {
+		t.Fatal("InquiryVA() error = nil, want non-nil — this pins a known limitation (bare-number responseCode currently breaks the shared transport decode); if this now passes, the limitation has been fixed and this test should be updated to assert success")
 	}
 }
 

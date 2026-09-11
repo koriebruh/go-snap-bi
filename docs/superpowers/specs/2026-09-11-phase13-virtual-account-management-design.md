@@ -7,6 +7,26 @@ quoted-string in all five worked examples (research §3.4's ambiguity
 list), and none of these five uses `channelCode`/`paymentType`.
 Source: `docs/research/2026-09-11-transfer-kredit-portal-research.md` §5.3.
 
+## Known limitation: responseCode as a bare number on Inquiry VA
+
+Research §3.4 records that `responseCode` — String(7) and quoted in
+every other worked example across the whole researched Transfer Kredit
+group — appears unquoted as a bare JSON number in exactly two worked
+responses: Inquiry VA (30, this phase) and Get Report (35, a later
+phase), e.g. `"responseCode":2003000,`.
+
+`responseCode` is decoded once, package-wide, by the shared transport
+layer (`transport.go`) before any per-service `Response` type ever sees
+the body — not by any type introduced in this phase. A server that
+actually sends a bare-number `responseCode` for Inquiry VA fails at
+that shared decode step with a JSON type error, before
+`InquiryVAResponse` is populated at all. Fixing this would mean
+changing the transport layer's `responseCode` decode for every
+endpoint in the package, not a change scoped to Virtual Account —
+out of scope for this phase. `TestInquiryVA_BareNumberResponseCodeIsAKnownLimitation`
+pins the current (failing) behavior explicitly, so this is a recorded,
+tracked gap rather than a silent one.
+
 ## Response envelope shape
 
 Research §5.3 records a response-envelope top-level field name split:

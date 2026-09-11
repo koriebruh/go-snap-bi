@@ -47,7 +47,12 @@ type LocalizedText struct {
 // "billDetails[]" array (max 24 entries). All fields are unmarked for
 // M/O in the source, so all carry omitempty; BillDescription, BillAmount,
 // and Reason are pointers since omitempty has no effect on a
-// non-pointer struct value.
+// non-pointer struct value. BillReferenceNo is documented Numeric in
+// the Guides tab (research §3); per the package's ambiguous-type rule,
+// a documented Numeric field is typed json.RawMessage rather than
+// string, since a plain string field fails the entire decode if any
+// issuer sends it as a bare JSON number, matching the existing
+// AccountTransactionLimit/APIKey precedent.
 type BillDetail struct {
 	BillCode        string          `json:"billCode,omitempty"`
 	BillNo          string          `json:"billNo,omitempty"`
@@ -59,7 +64,7 @@ type BillDetail struct {
 	AdditionalInfo  json.RawMessage `json:"additionalInfo,omitempty"`
 	BillAmountLabel string          `json:"billAmountLabel,omitempty"`
 	BillAmountValue string          `json:"billAmountValue,omitempty"`
-	BillReferenceNo string          `json:"billReferenceNo,omitempty"`
+	BillReferenceNo json.RawMessage `json:"billReferenceNo,omitempty"`
 	Status          string          `json:"status,omitempty"`
 	Reason          *LocalizedText  `json:"reason,omitempty"`
 }

@@ -174,8 +174,10 @@ func TestCreateVA_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 			t.Errorf(`wire body[%q] = %v, want ""`, key, v)
 		}
 	}
-	if _, ok := got["partnerServiceId"]; ok {
-		t.Error(`wire body has "partnerServiceId" key, want it omitted (Optional here, unlike other VA endpoints)`)
+	for _, key := range []string{"partnerServiceId", "customerNo", "virtualAccountNo"} {
+		if _, ok := got[key]; ok {
+			t.Errorf(`wire body has %q key, want it omitted (identity triple is Optional here, unlike other VA endpoints)`, key)
+		}
 	}
 }
 
