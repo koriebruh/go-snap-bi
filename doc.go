@@ -25,6 +25,10 @@
 //     (docs/superpowers/specs/2026-09-11-phase13-virtual-account-management-design.md)
 //   - VAInquiry, VAPayment, VAInquiryStatus
 //     (docs/superpowers/specs/2026-09-11-phase14-virtual-account-transaction-design.md)
+//   - VAInquiryPaymentIntrabank, VAPaymentIntrabank,
+//     VANotifyPaymentIntrabank, VAGetReport (completes the Virtual
+//     Account sub-group)
+//     (docs/superpowers/specs/2026-09-11-phase15-virtual-account-intrabank-report-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See
