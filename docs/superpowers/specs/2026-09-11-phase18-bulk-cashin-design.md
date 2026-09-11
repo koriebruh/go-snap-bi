@@ -53,7 +53,28 @@ fields, matching how Phase 11-13 handled unmarked response fields) +
 string`, `BulkID string` `json:"bulkid"` M (no omitempty — see the
 casing note above) + `PartnerBulkID string` O.
 
-### NotifyBulkCashIn (41)
+### NotifyBulkCashIn (41) — inbound, struct-only (corrected in santa-loop round 1)
+
+**Correction:** this phase originally shipped a `NotifyBulkCashIn`
+calling function, treating this endpoint as outbound like every other
+endpoint. A santa-loop reviewer caught this as unverified: §5.6 has no
+"the PJP sends this outward" statement (contrast §5.3 line 154's
+explicit language for VA Notify Payment Intrabank, the package's one
+precedent for an outbound "Notify" endpoint), and the evidence points
+the other way — `SubmitBulkCashInResponse.BulkID` is bank-issued, and
+this endpoint's own shape (`bulkId`/`partnerBulkId` + per-item
+`responseCode`/`responseMessage`) mirrors §5.2 line 116's Service 21
+(Interbank Bulk Transfer - Notification), which research explicitly
+annotates "settlement callback shape" and which this package already
+models as inbound-only (Phase 12). This phase now models endpoint 41
+the same way: no calling function, plain request/response struct
+types, matching `InterbankBulkTransferNotificationRequest`/`Response`
+exactly. `BulkObject` carries no `omitempty` on the request (matching
+that same Phase 12 precedent, since the whole point of this callback
+is to report per-item results — a callback with a suppressible items
+array is a degenerate case for this shape), a departure from this
+design doc's original default-to-Optional treatment for unmarked
+array-cardinality fields.
 
 `BulkCashInNotificationItem` (one entry in `bulkObject[]`) —
 deliberately its own type, not a reuse of Phase 12's
@@ -68,21 +89,23 @@ omitempty) + `AdditionalInfo json.RawMessage` O.
 
 `NotifyBulkCashInRequest`: `BulkID string` M (no omitempty) +
 `PartnerBulkID string` M (no omitempty) + `BulkObject
-[]BulkCashInNotificationItem` O (array cardinality unmarked, same
-default as above).
+[]BulkCashInNotificationItem` (no `omitempty` — see the correction
+note above).
 
-`NotifyBulkCashInResponse`: `ResponseCode string`, `ResponseMessage
-string`, `BulkID string` `json:"bulkId"` M (no omitempty — camelCase,
-per this endpoint's own field description) + `PartnerBulkID string` M
-(no omitempty).
+`NotifyBulkCashInResponse` (the response a caller sends back, not one
+this package decodes from a call it made): `ResponseCode string`,
+`ResponseMessage string`, `BulkID string` `json:"bulkId"` M (no
+omitempty — camelCase, per this endpoint's own field description) +
+`PartnerBulkID string` M (no omitempty).
 
 ## Function behavior
 
-Both functions follow the exact pattern already established across
-the package: marshal `req`, set `hb.Body`, call `t.Do`,
+`SubmitBulkCashIn` follows the exact pattern already established
+across the package: marshal `req`, set `hb.Body`, call `t.Do`,
 `checkResponseStatus`, unmarshal into `Response`, error if
-`ResponseCode == ""`. No method override — POST, matching every
-endpoint in this sub-group. `SubmitBulkCashIn` and `NotifyBulkCashIn`
-both get the standard non-idempotency doc note (mutating,
-state-changing calls), matching every other mutating endpoint in the
-package.
+`ResponseCode == ""`. No method override — POST. It gets the standard
+non-idempotency doc note (a mutating, state-changing call), matching
+every other mutating endpoint in the package.
+
+`NotifyBulkCashIn` has no calling function — see the correction note
+above.

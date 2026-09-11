@@ -33,7 +33,8 @@
 //     (docs/superpowers/specs/2026-09-11-phase16-transaction-status-inquiry-bank-design.md)
 //   - AccountInquiryCustomerTopUp, CustomerTopUp, CustomerTopUpInquiryStatus
 //     (docs/superpowers/specs/2026-09-11-phase17-customer-top-up-design.md)
-//   - SubmitBulkCashIn, NotifyBulkCashIn
+//   - SubmitBulkCashIn, plus inbound-only notification types for
+//     Notify Bulk Cash In
 //     (docs/superpowers/specs/2026-09-11-phase18-bulk-cashin-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
