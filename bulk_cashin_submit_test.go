@@ -143,6 +143,31 @@ func TestSubmitBulkCashIn_MandatoryFieldAlwaysSerialized(t *testing.T) {
 	}
 }
 
+// TestSubmitBulkCashInResponse_MarshalsBulkIDAsLowercaseD pins the
+// deliberate "bulkid" (lowercase d) casing decision on this type's
+// BulkID field, distinct from NotifyBulkCashInResponse's camelCase
+// "bulkId" — see the type's doc comment for the unresolved research
+// contradiction this reflects. encoding/json matches tag keys
+// case-insensitively on decode, so nothing else in the package would
+// catch a future edit accidentally "fixing" this tag to camelCase;
+// only a marshal-based assertion observes the literal casing.
+func TestSubmitBulkCashInResponse_MarshalsBulkIDAsLowercaseD(t *testing.T) {
+	b, err := json.Marshal(SubmitBulkCashInResponse{BulkID: "BULK000001"})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode marshaled bytes: %v", err)
+	}
+	if _, ok := got["bulkid"]; !ok {
+		t.Errorf(`marshaled SubmitBulkCashInResponse missing "bulkid" (lowercase d) key; got keys %v`, got)
+	}
+	if _, ok := got["bulkId"]; ok {
+		t.Error(`marshaled SubmitBulkCashInResponse has "bulkId" (camelCase) key, want only lowercase-d "bulkid"`)
+	}
+}
+
 func TestSubmitBulkCashIn_MalformedAdditionalInfoIsMarshalError(t *testing.T) {
 	var requested atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -149,6 +150,62 @@ func TestNotifyBulkCashIn_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 	}
 	if _, ok := got["bulkObject"]; ok {
 		t.Error(`wire body has "bulkObject" key, want it omitted when empty`)
+	}
+}
+
+// TestNotifyBulkCashInResponse_MarshalsBulkIDAsCamelCase pins the
+// deliberate camelCase "bulkId" casing decision on this type's BulkID
+// field, distinct from SubmitBulkCashInResponse's lowercase-d
+// "bulkid" — see the type's doc comment for the unresolved research
+// contradiction this reflects. encoding/json matches tag keys
+// case-insensitively on decode, so nothing else in the package would
+// catch a future edit accidentally "fixing" this tag to lowercase-d;
+// only a marshal-based assertion observes the literal casing.
+func TestNotifyBulkCashInResponse_MarshalsBulkIDAsCamelCase(t *testing.T) {
+	b, err := json.Marshal(NotifyBulkCashInResponse{BulkID: "BULK000001"})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode marshaled bytes: %v", err)
+	}
+	if _, ok := got["bulkId"]; !ok {
+		t.Errorf(`marshaled NotifyBulkCashInResponse missing "bulkId" (camelCase) key; got keys %v`, got)
+	}
+	if _, ok := got["bulkid"]; ok {
+		t.Error(`marshaled NotifyBulkCashInResponse has "bulkid" (lowercase d) key, want only camelCase "bulkId"`)
+	}
+}
+
+// TestNotifyBulkCashIn_MalformedBulkObjectAdditionalInfoIsMarshalError
+// pins that a json.RawMessage field holding invalid JSON, nested
+// inside a BulkObject item, fails at json.Marshal, and that
+// NotifyBulkCashIn surfaces that as an error without sending any HTTP
+// request. NotifyBulkCashInRequest has no top-level AdditionalInfo, so
+// this is the only reachable marshal-error path.
+func TestNotifyBulkCashIn_MalformedBulkObjectAdditionalInfoIsMarshalError(t *testing.T) {
+	var requested atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested.Store(true)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2004100","responseMessage":"ok","bulkId":"BULK000001","partnerBulkId":"partner-bulk-1"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/notify-bulk-cash-in"
+	tr := &Transport{}
+	_, err := NotifyBulkCashIn(context.Background(), tr, hb, NotifyBulkCashInRequest{
+		BulkObject: []BulkCashInNotificationItem{
+			{AdditionalInfo: json.RawMessage(`{`)},
+		},
+	})
+	if err == nil {
+		t.Fatal("NotifyBulkCashIn() error = nil, want non-nil for malformed BulkObject[].AdditionalInfo JSON")
+	}
+	if requested.Load() {
+		t.Error("NotifyBulkCashIn() sent an HTTP request despite a request-encoding failure")
 	}
 }
 
