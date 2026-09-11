@@ -54,31 +54,46 @@ with nowhere to put a JSON tag. The function:
    protocol requirement of this specific endpoint, not something a caller
    should choose per call (every other implemented endpoint is POST, so
    there's no existing caller expectation to preserve either way).
-2. Appends `custIDMerchant` to `hb.EndpointURL` via `url.PathEscape`,
-   not raw string concatenation — this is the package's first caller
-   input that reaches a URL path rather than a JSON body, so it is also
-   the first place a malformed or adversarial `custIDMerchant` value
-   (e.g. containing `/` or `..`) could otherwise alter the request path
-   instead of just being rejected as an invalid identifier value.
+2. Rejects `custIDMerchant` values `""`, `"."`, and `".."` outright, then
+   appends the value to `hb.EndpointURL` (with any trailing `/` trimmed
+   first) via `url.PathEscape`, not raw string concatenation. This is the
+   package's first caller input that reaches a URL path rather than a
+   JSON body, and the two hazards are different: `url.PathEscape` DOES
+   escape `/` (santa-loop review confirmed: a `custIDMerchant` containing
+   `/` cannot add an extra path segment), but it does NOT escape `.` —
+   `.`/`..` are ordinary path-segment characters that only become
+   dangerous through their special filesystem-style meaning, which
+   escaping can't distinguish from a literal dot. That's a go-review
+   finding on this phase: the package's own `BalanceInquiryRequest`/
+   `AccountUnbindingRequest` precedent for skipping client-side
+   validation applies to JSON *body* fields, where a bad value can only
+   be rejected by the server — it doesn't transfer to a URL *path*
+   segment, where a bad value can silently redirect the request to a
+   different resource (a `..` walks up one path level) before the
+   server ever sees it.
 3. Calls `t.Do` and decodes exactly like every other binding
    (`checkResponseStatus`, decode, reject empty `responseCode`).
-
-No client-side validation of `custIDMerchant` being non-empty: an empty
-value produces a syntactically valid (if pointless) URL ending in
-`.../custIdMerchant/`, and the server rejects it — same "the server
-validates business rules the wire shape doesn't capture" stance as
-`BalanceInquiryRequest`/`AccountUnbindingRequest`.
 
 This is a read-only GET with no side effects, so it needs no
 idempotency note.
 
 ## Testing
 
-6 tests: full-struct response DeepEqual (nested `accountList`), a
-URL-construction test (asserting the exact request path the server
-received, including escaping a `custIDMerchant` value containing a `/`),
-non-2xx-responseCode, non-2xx-status-with-2xx-body,
-2xx-status-with-no-responseCode, and a test asserting the request method
-is GET with no body regardless of what the caller left on `hb.Body`/`hb.Method`
-before the call (proving step 1 above actually overrides caller-set
-values rather than only filling in unset ones).
+9 tests: full-struct response DeepEqual (nested `accountList`), a
+URL-construction test (asserting the exact request wire path via
+`r.URL.EscapedPath()`, including escaping a `custIDMerchant` value
+containing a `/` — `r.URL.Path` decodes `%2F` back to `/`, so it can't
+tell an escaped slash from a real path boundary), a
+path-traversal-rejection test (`""`, `"."`, `".."` all rejected before
+any request is sent), a trailing-slash test (a caller's `EndpointURL`
+ending in `/` still produces one, not two, slashes before
+`custIdMerchant`), a signature-correctness test (recomputes
+`BuildStringToSignTransaction` from the server-observed timestamp and
+compares against the received `X-SIGNATURE`, closing the one part of
+this GET-shaped request no other test exercises), non-2xx-responseCode,
+non-2xx-status-with-2xx-body, 2xx-status-with-no-responseCode, and a
+test asserting the request method is GET with no body regardless of
+what the caller left on `hb.Body`/`hb.Method` before the call (proving
+the override actually overrides caller-set values rather than only
+filling in unset ones — verified via `r.ContentLength`, not a
+best-effort one-byte `Read`).

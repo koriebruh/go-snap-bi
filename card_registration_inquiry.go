@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // CardRegistrationInquiryAccountData is the "accountData" object nested
@@ -51,13 +52,24 @@ type CardRegistrationInquiryResponse struct {
 // should not need to configure protocol details specific to it.
 // custIDMerchant is percent-encoded via url.PathEscape before being
 // appended to hb.EndpointURL — this is the package's first caller input
-// that reaches a URL path rather than a JSON body, so unlike every other
-// binding's fields, an unescaped value here could alter the request path
-// rather than simply being rejected as an invalid identifier.
+// that reaches a URL path rather than a JSON body. url.PathEscape escapes
+// "/" (so custIDMerchant cannot add an extra path segment), but it does
+// NOT escape "." or "..", since both are valid characters in a path
+// segment on their own — only their special two meanings ("this
+// directory", "parent directory") make them dangerous, and escaping
+// can't distinguish "literal dot" from "traversal dot". CardRegistrationInquiry
+// therefore rejects "", ".", and ".." outright rather than relying on
+// escaping to neutralize them; every other value is passed through
+// url.PathEscape unchanged.
 func CardRegistrationInquiry(ctx context.Context, t *Transport, hb HeaderBuilder, custIDMerchant string) (CardRegistrationInquiryResponse, error) {
+	switch custIDMerchant {
+	case "", ".", "..":
+		return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid custIdMerchant %q", custIDMerchant)
+	}
+
 	hb.Method = http.MethodGet
 	hb.Body = nil
-	hb.EndpointURL = hb.EndpointURL + "/custIdMerchant/" + url.PathEscape(custIDMerchant)
+	hb.EndpointURL = strings.TrimSuffix(hb.EndpointURL, "/") + "/custIdMerchant/" + url.PathEscape(custIDMerchant)
 
 	env, err := t.Do(ctx, hb)
 	if err != nil {
