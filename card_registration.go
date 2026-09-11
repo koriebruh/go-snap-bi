@@ -17,9 +17,18 @@ import (
 // non-string JSON representation (a bare object, a bare number), even
 // though the portal's one worked example renders both as a quoted string.
 // A caller assigning a plain Go string must quote it first — e.g.
-// json.RawMessage(`"1000000"`), not json.RawMessage(limitStr) — to match
-// the worked example's wire shape; the unquoted form is valid JSON and
-// will be sent as-is, silently diverging from that example.
+// json.RawMessage(`"1000000"`), not json.RawMessage(limitStr), and
+// json.RawMessage(`"`+cardDataBase64+`"`), not
+// json.RawMessage(cardDataBase64) — to match the worked examples' wire
+// shape. Getting this wrong is not silent: neither a base64 blob (its '/'
+// and '+' characters) nor a formatted decimal (e.g. "1,000,000") is valid
+// JSON on its own, so an unquoted assignment fails json.Marshal and
+// CardRegistration returns an "encode request" error before any request
+// is sent. Two other shapes are worth knowing: an empty json.RawMessage
+// is dropped by omitempty (the field is absent from the wire body, not
+// sent empty), while json.RawMessage("null") is NOT dropped — it is sent
+// as an explicit "limit":null / "cardData":null, since omitempty only
+// skips a zero-length slice.
 type CardRegistrationRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	AccountName        string          `json:"accountName,omitempty"`
@@ -62,7 +71,13 @@ type CardRegistrationResponse struct {
 }
 
 // CardRegistration calls the SNAP Card Registration endpoint (Service Code
-// 01). hb must already carry every field HeaderBuilder needs except Body,
+// 01). It mints a BankCardToken, so this operation is not idempotent and
+// this package does not retry. Callers that retry a failed or timed-out
+// call should reuse the same X-EXTERNAL-ID, since the server's own
+// duplicate-detection keys on it — a fresh X-EXTERNAL-ID on retry risks a
+// duplicate card bind.
+//
+// hb must already carry every field HeaderBuilder needs except Body,
 // which CardRegistration sets itself so the exact marshaled bytes are used
 // for both signing and the wire body.
 func CardRegistration(ctx context.Context, t *Transport, hb HeaderBuilder, req CardRegistrationRequest) (CardRegistrationResponse, error) {

@@ -114,11 +114,11 @@ func TestCardRegistration_RequestBodyRoundTrips(t *testing.T) {
 // "Encrypted Object"/"decimal", both of which permit a non-string JSON
 // representation, even though the portal's worked example quotes both.
 // Both are request-only fields, so the guarantee under test is that
-// json.Marshal accepts every shape and sends it verbatim — unlike
-// TestAccountCreation_APIKeyAcceptsEitherWireShape (a response field,
-// where the risk is decode failure), the risk here is a caller-supplied
-// shape reaching the wire unexamined, so this test asserts the captured
-// request body byte-for-byte rather than only that the call succeeded.
+// json.Marshal accepts every valid-JSON shape and forwards it to the wire
+// (whitespace compacted, as encoding/json always does for RawMessage —
+// not a caller-visible byte-for-byte passthrough), rather than the
+// decode-failure risk TestAccountCreation_APIKeyAcceptsEitherWireShape (a
+// response field) guards against.
 func TestCardRegistration_LimitAndCardDataAcceptEitherWireShape(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -166,12 +166,162 @@ func TestCardRegistration_LimitAndCardDataAcceptEitherWireShape(t *testing.T) {
 				t.Fatalf("decode request body the server received: %v", err)
 			}
 			if string(got["limit"]) != tt.limit {
-				t.Errorf(`wire body["limit"] = %s, want %s (exact shape sent as given, not normalized)`, got["limit"], tt.limit)
+				t.Errorf(`wire body["limit"] = %s, want %s (shape preserved)`, got["limit"], tt.limit)
 			}
 			if string(got["cardData"]) != tt.cardData {
-				t.Errorf(`wire body["cardData"] = %s, want %s (exact shape sent as given, not normalized)`, got["cardData"], tt.cardData)
+				t.Errorf(`wire body["cardData"] = %s, want %s (shape preserved)`, got["cardData"], tt.cardData)
 			}
 		})
+	}
+}
+
+// TestCardRegistration_NonNumericUnquotedLimitFailsEncode pins the
+// non-silent failure mode CardRegistrationRequest's doc comment warns
+// about: an unquoted string that isn't a bare JSON number (e.g. a
+// formatted "1,000,000") is not valid JSON on its own, so json.Marshal
+// fails and CardRegistration returns an encode error before any request
+// reaches the server — it does not silently reach the wire.
+func TestCardRegistration_NonNumericUnquotedLimitFailsEncode(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"responseCode":"2000100","responseMessage":"ok","bankCardToken":"tok"}`)
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/registration-card-bind"
+	tr := &Transport{}
+	req := CardRegistrationRequest{
+		BankCardNo:     "3984029384023984",
+		CustIDMerchant: "0012345679504",
+		Limit:          json.RawMessage(`1,000,000`),
+	}
+	_, err := CardRegistration(context.Background(), tr, hb, req)
+	if err == nil {
+		t.Fatal("CardRegistration() error = nil, want non-nil for a non-numeric unquoted limit")
+	}
+	if called {
+		t.Error("CardRegistration() reached the server despite a marshal failure; want the request never sent")
+	}
+}
+
+// TestCardRegistration_InvalidCardDataFailsEncode mirrors
+// TestCardRegistration_NonNumericUnquotedLimitFailsEncode for CardData:
+// a base64 blob (containing '/' and '+') assigned unquoted is not valid
+// JSON on its own, so json.Marshal fails and the request is never sent.
+func TestCardRegistration_InvalidCardDataFailsEncode(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"responseCode":"2000100","responseMessage":"ok","bankCardToken":"tok"}`)
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/registration-card-bind"
+	tr := &Transport{}
+	req := CardRegistrationRequest{
+		BankCardNo:     "3984029384023984",
+		CustIDMerchant: "0012345679504",
+		CardData:       json.RawMessage(`UIdFgZi9BhWx9Scbz/YK+abc=`),
+	}
+	_, err := CardRegistration(context.Background(), tr, hb, req)
+	if err == nil {
+		t.Fatal("CardRegistration() error = nil, want non-nil for an unquoted base64 cardData blob")
+	}
+	if called {
+		t.Error("CardRegistration() reached the server despite a marshal failure; want the request never sent")
+	}
+}
+
+// TestCardRegistration_MandatoryFieldsAlwaysSerialized pins that
+// BankCardNo and CustIDMerchant — the two request fields without
+// omitempty — are always present on the wire, even as "", mirroring
+// TestAccountBinding_MerchantIDAlwaysSerialized/
+// TestAccountUnbinding_MerchantIDAlwaysSerialized.
+func TestCardRegistration_MandatoryFieldsAlwaysSerialized(t *testing.T) {
+	var mu sync.Mutex
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		mu.Lock()
+		gotBody = b
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"responseCode":"2000100","responseMessage":"ok","bankCardToken":"tok"}`)
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/registration-card-bind"
+	tr := &Transport{}
+	if _, err := CardRegistration(context.Background(), tr, hb, CardRegistrationRequest{}); err != nil {
+		t.Fatalf("CardRegistration() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	var got map[string]any
+	if err := json.Unmarshal(gotBody, &got); err != nil {
+		t.Fatalf("decode request body the server received: %v", err)
+	}
+	for _, key := range []string{"bankCardNo", "custIdMerchant"} {
+		v, ok := got[key]
+		if !ok {
+			t.Errorf(`wire body missing %q key; want it always present, even as ""`, key)
+			continue
+		}
+		if v != "" {
+			t.Errorf(`wire body[%q] = %v, want ""`, key, v)
+		}
+	}
+}
+
+// TestCardRegistration_EmptyLimitOmitsField pins the third documented
+// behavior: an empty json.RawMessage is dropped by omitempty, so the
+// field is absent from the wire body, not sent as an empty value.
+func TestCardRegistration_EmptyLimitOmitsField(t *testing.T) {
+	var mu sync.Mutex
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		mu.Lock()
+		gotBody = b
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"responseCode":"2000100","responseMessage":"ok","bankCardToken":"tok"}`)
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/registration-card-bind"
+	tr := &Transport{}
+	req := CardRegistrationRequest{
+		BankCardNo:     "3984029384023984",
+		CustIDMerchant: "0012345679504",
+		Limit:          json.RawMessage(``),
+	}
+	if _, err := CardRegistration(context.Background(), tr, hb, req); err != nil {
+		t.Fatalf("CardRegistration() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(gotBody, &got); err != nil {
+		t.Fatalf("decode request body the server received: %v", err)
+	}
+	if _, ok := got["limit"]; ok {
+		t.Errorf(`wire body has "limit" key = %s, want key absent for an empty RawMessage`, got["limit"])
 	}
 }
 

@@ -19,8 +19,14 @@ import (
 // worked example renders it as a quoted string. A caller assigning a
 // plain Go string must quote it first — e.g. json.RawMessage(`"1000000"`),
 // not json.RawMessage(limitStr) — to match the worked example's wire
-// shape; the unquoted form is valid JSON and will be sent as-is, silently
-// diverging from that example.
+// shape. Getting this wrong is not silent: a formatted decimal like
+// "1,000,000" is not valid JSON on its own, so an unquoted assignment
+// fails json.Marshal and CardRegistrationSetLimit returns an "encode
+// request" error before any request is sent. Two other shapes are worth
+// knowing: an empty json.RawMessage is dropped by omitempty (the field is
+// absent from the wire body, not sent empty), while json.RawMessage("null")
+// is NOT dropped — it is sent as an explicit "limit":null, since
+// omitempty only skips a zero-length slice.
 type CardRegistrationSetLimitRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	BankAccountNo      string          `json:"bankAccountNo,omitempty"`
