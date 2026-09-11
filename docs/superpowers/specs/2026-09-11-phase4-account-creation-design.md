@@ -60,9 +60,9 @@ use a different subset of fields.
 | referenceNo | string | C | must be filled on success |
 | partnerReferenceNo | string | O | |
 | authCode | string | O | |
-| apiKey | string | O | standard types this "Numeric" but gives no length/format constraint; modeled as `string` to avoid a false precision/range assumption, consistent with `PageSize`/`PageNumber`'s established precedent (Phase 3) of trusting the wire shape over a table's type label when there's ambiguity |
+| apiKey | json.RawMessage | O | standard types this "Numeric" with no worked example to confirm the wire shape. **Phase 3's `PageSize`/`PageNumber`-as-string precedent does NOT apply here** — that precedent rests on an observed worked example showing quoted strings; this endpoint has none. Since a fixed type (string or numeric) dominates in the wrong direction on the response side — a plain `string` field hard-fails the *entire* decode if the server sends an unquoted number, discarding `referenceNo`/`accountId`/`authCode` too, on a non-idempotent create where the account may already exist — `apiKey` is modeled as `json.RawMessage` to tolerate either shape losslessly (santa-loop round-1 finding, both reviewers independently) |
 | accountId | string | O | |
-| state | string | O | |
+| state | string | O | opaque CSRF-protection nonce echoed from the request (this is an OAuth-style flow); the caller, not this package, is responsible for comparing it against the value it sent |
 | additionalInfo | object | O | |
 
 ## Design
@@ -78,16 +78,25 @@ use a different subset of fields.
 
 ## Testing
 
-Same pattern as Phase 2/3, adapted for the missing worked example:
+Same pattern as Phase 2/3, adapted for the missing worked example, plus two
+standing requirements every binding now carries (established across Phase
+2/3's santa-loop rounds, not just this one):
 - A response test using a hand-built fixture (not a captured worked
   example, since none exists) covering every response field via
   `reflect.DeepEqual` on the full struct, including a populated
   `AdditionalInfo`.
 - A request wire-body test decoding into `map[string]any`, covering a
   representative subset of fields including the nested `deviceInfo` object,
-  not the full 18-field list (matching Phase 2/3's precedent of not
+  not the full 19-field list (matching Phase 2/3's precedent of not
   asserting every single optional field on the request side).
 - Non-2xx `responseCode` test.
-- Binding-level HTTP-200-with-no-responseCode test (per the Phase 3
-  santa-loop precedent — this is now a required test for every binding,
-  not something to skip).
+- **Standing requirement**: non-2xx HTTP status with a 2xx-shaped body must
+  error (Phase 2 santa-loop round-3 finding — `checkResponseStatus` handles
+  this at the shared-helper level, but each binding needs its own
+  regression test proving it actually calls that helper).
+- **Standing requirement**: HTTP 200 with no `responseCode` field must
+  error (Phase 3 santa-loop round-1 finding).
+- `APIKey`-specific: both a quoted-string and an unquoted-number wire shape
+  must decode without losing the rest of the response (this phase's own
+  santa-loop round-1 finding, since `apiKey` is the first field in the
+  package with a genuinely ambiguous wire type on the response side).

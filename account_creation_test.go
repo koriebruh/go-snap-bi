@@ -75,6 +75,11 @@ func TestAccountCreation_APIKeyAcceptsEitherWireShape(t *testing.T) {
 	}{
 		{"quoted string", `"998877"`},
 		{"unquoted number", `998877`},
+		// json null decodes to a non-nil 4-byte RawMessage("null"), distinct
+		// from an absent key (which decodes to nil) — a third caller-visible
+		// shape found in santa-loop review, worth pinning explicitly rather
+		// than leaving it as an unstated side effect of the type choice.
+		{"json null", `null`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

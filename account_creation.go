@@ -50,7 +50,9 @@ type AccountCreationRequest struct {
 // ReferenceNo/AccountID/AuthCode too) if the server sends it unquoted, for
 // what is a non-idempotent operation where the account may already exist.
 // json.RawMessage accepts either wire shape without loss; a caller strips
-// surrounding quotes themselves if the value is quoted.
+// surrounding quotes themselves if the value is quoted. A JSON null decodes
+// to a non-nil RawMessage("null"), distinct from an absent key (nil) — a
+// third shape a caller checking for presence should account for.
 type AccountCreationResponse struct {
 	ResponseCode       string          `json:"responseCode"`
 	ResponseMessage    string          `json:"responseMessage"`
