@@ -313,6 +313,46 @@ func TestTokenManager_AccessTokenB2B_NonTwoXXWithEmptyResponseCode(t *testing.T)
 	}
 }
 
+// TestTokenManager_AccessTokenB2B_NonTwoXXWithNonJSONBodyIsError is the
+// regression test for a santa-loop round-2 finding: a non-2xx response
+// whose body isn't even JSON (an HTML WAF page, or an empty body from a
+// load balancer) used to fail with an opaque decode error rather than an
+// errors.Is-matchable sentinel.
+func TestTokenManager_AccessTokenB2B_NonTwoXXWithNonJSONBodyIsError(t *testing.T) {
+	tests := []struct {
+		name       string
+		httpStatus int
+		body       string
+		wantErr    error
+	}{
+		{"HTML WAF page", http.StatusUnauthorized, "<html><body>401 Unauthorized</body></html>", ErrUnauthorized},
+		{"empty body", http.StatusServiceUnavailable, "", ErrServiceUnavailable},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.httpStatus)
+				_, _ = io.WriteString(w, tt.body)
+			}))
+			defer server.Close()
+
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatalf("rsa.GenerateKey: %v", err)
+			}
+			m := &TokenManager{BaseURL: server.URL, ClientKey: "client-key", Signer: key}
+
+			_, err = m.AccessTokenB2B(context.Background())
+			if err == nil {
+				t.Fatal("AccessTokenB2B() error = nil, want non-nil")
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("AccessTokenB2B() error = %v, want errors.Is(err, %v)", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestTokenManager_AccessTokenB2B_WaiterCtxCancelDoesNotBlock proves a
 // caller waiting on someone else's in-flight fetch returns as soon as its
 // own ctx is cancelled, rather than blocking for the full fetch duration.

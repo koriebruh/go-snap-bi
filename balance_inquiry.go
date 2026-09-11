@@ -85,10 +85,12 @@ func BalanceInquiry(ctx context.Context, t *Transport, hb HeaderBuilder, req Bal
 		return BalanceInquiryResponse{}, fmt.Errorf("snap: balance inquiry: decode response: %w", err)
 	}
 	if resp.ResponseCode == "" {
-		// responseCode is mandatory in the standard's response shape. A
-		// non-2xx response with a body that doesn't carry it (e.g. a
-		// proxy/WAF error page) must not fall through to being returned as
-		// a "successful" zero-value response.
+		// responseCode is mandatory in the standard's response shape. By
+		// this point a non-2xx status with no responseCode was already
+		// caught above (or, for a non-JSON body, in Transport.Do itself) —
+		// the only way to reach here is a 2xx HTTP status whose JSON body
+		// still omits responseCode, a malformed "successful" response that
+		// must not be returned as a zero-value success.
 		return BalanceInquiryResponse{}, errors.New("snap: balance inquiry: response has no responseCode")
 	}
 	return resp, nil

@@ -78,6 +78,16 @@ func (t *Transport) Do(ctx context.Context, hb HeaderBuilder) (Envelope, error) 
 		ResponseMessage string `json:"responseMessage"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			// A non-JSON body (HTML WAF page, empty body from a load
+			// balancer, etc.) on a non-2xx response must still be
+			// errors.Is-matchable via the HTTP status, not just an opaque
+			// decode error — this is the same proxy/WAF/gateway case
+			// Envelope.StatusCode exists for, just reached from the parse
+			// failure path instead of a successfully-parsed empty
+			// responseCode.
+			return Envelope{}, fmt.Errorf("snap: transport: %w: http status %d: decode response body: %v", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode, err)
+		}
 		return Envelope{}, fmt.Errorf("snap: transport: decode response body: %w", err)
 	}
 

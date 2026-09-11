@@ -127,10 +127,11 @@ func envelopeError(responseCode string) error {
 	}
 	httpStatus, _, _, err := ParseResponseCode(responseCode)
 	if err != nil {
-		// No "token manager"-specific prefix here: this is a shared helper
-		// used by every per-service binding, not just TokenManager. Callers
-		// that want subsystem context wrap this error themselves.
-		return fmt.Errorf("snap: response carries malformed response code: %w", err)
+		// No "snap: <subsystem>:" prefix here: this is a shared helper used
+		// by every per-service binding, not just TokenManager, and every
+		// caller already wraps this with its own "snap: <subsystem>: %w" —
+		// adding one here would double it up.
+		return fmt.Errorf("response carries malformed response code: %w", err)
 	}
 	if httpStatus >= 200 && httpStatus < 300 {
 		return nil
@@ -166,6 +167,12 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 
 	var parsed accessTokenResponse
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			// A non-JSON body (HTML WAF page, empty body, etc.) on a
+			// non-2xx response must still be errors.Is-matchable via the
+			// HTTP status, not just an opaque decode error.
+			return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w: http status %d: decode response body: %v", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode, err)
+		}
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: decode response body: %w", err)
 	}
 	if parsed.ResponseCode == "" && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
