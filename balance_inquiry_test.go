@@ -71,6 +71,12 @@ func TestBalanceInquiry_ParsesWorkedExampleResponse(t *testing.T) {
 	if resp.ResponseCode != "2001100" {
 		t.Errorf("ResponseCode = %q, want %q", resp.ResponseCode, "2001100")
 	}
+	if resp.ReferenceNo != "2020102977770000000009" {
+		t.Errorf("ReferenceNo = %q, want %q", resp.ReferenceNo, "2020102977770000000009")
+	}
+	if resp.PartnerReferenceNo != "2020102900000000000001" {
+		t.Errorf("PartnerReferenceNo = %q, want %q", resp.PartnerReferenceNo, "2020102900000000000001")
+	}
 	if resp.AccountNo != "115471119" {
 		t.Errorf("AccountNo = %q, want %q", resp.AccountNo, "115471119")
 	}

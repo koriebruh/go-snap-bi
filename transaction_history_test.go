@@ -54,6 +54,12 @@ func TestTransactionHistoryList_ParsesWorkedExampleResponse(t *testing.T) {
 	if resp.ResponseCode != "2001200" {
 		t.Errorf("ResponseCode = %q, want %q", resp.ResponseCode, "2001200")
 	}
+	if resp.ReferenceNo != "2020102977770000000009" {
+		t.Errorf("ReferenceNo = %q, want %q", resp.ReferenceNo, "2020102977770000000009")
+	}
+	if resp.PartnerReferenceNo != "2020102900000000000001" {
+		t.Errorf("PartnerReferenceNo = %q, want %q", resp.PartnerReferenceNo, "2020102900000000000001")
+	}
 	if len(resp.DetailData) != 1 {
 		t.Fatalf("len(DetailData) = %d, want 1", len(resp.DetailData))
 	}
@@ -138,5 +144,34 @@ func TestTransactionHistoryList_NonTwoXXResponseCodeIsError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrBadRequest) {
 		t.Errorf("TransactionHistoryList() error = %v, want errors.Is(err, ErrBadRequest)", err)
+	}
+}
+
+// TestTransactionHistoryList_NonTwoXXStatusWithTwoXXBodyIsError is the
+// binding-specific regression test for the Phase 2 santa-loop round-3 HIGH
+// finding: an HTTP 500 whose body still carries a 2xx-class responseCode
+// must not be treated as success. Unlike the plain non-2xx-responseCode
+// test above (which would pass even under the old, pre-fix pattern, since
+// envelopeError alone already classifies a genuinely non-2xx code
+// correctly), this specifically exercises checkResponseStatus's
+// transport-status-is-authoritative behavior at this binding's own call
+// site.
+func TestTransactionHistoryList_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(standardWorkedExampleTransactionHistoryListResponse)) // responseCode "2001200"
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/transaction-history-list"
+	tr := &Transport{}
+	resp, err := TransactionHistoryList(context.Background(), tr, hb, TransactionHistoryListRequest{})
+	if err == nil {
+		t.Fatalf("TransactionHistoryList() error = nil, want non-nil for HTTP 500 with a 2xx-shaped body; got %+v", resp)
+	}
+	if !errors.Is(err, ErrInternalServerError) {
+		t.Errorf("TransactionHistoryList() error = %v, want errors.Is(err, ErrInternalServerError)", err)
 	}
 }

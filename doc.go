@@ -6,8 +6,9 @@
 // parsing — see docs/superpowers/specs/2026-09-10-go-snap-bi-core-design.md.
 //
 // Phase 2 (in progress): typed per-service request/response bindings built
-// on Phase 1, added incrementally, one service at a time — see
-// docs/superpowers/specs/2026-09-11-phase2-balance-inquiry-design.md for the
-// first one (BalanceInquiry). Most services (transfer, virtual account,
-// QRIS, direct debit, etc.) are not yet implemented.
+// on Phase 1, added incrementally, one service at a time. Implemented so
+// far: BalanceInquiry (docs/superpowers/specs/2026-09-11-phase2-balance-inquiry-design.md)
+// and TransactionHistoryList (docs/superpowers/specs/2026-09-11-phase3-transaction-history-design.md).
+// Most services (transfer, virtual account, QRIS, direct debit, etc.) are
+// not yet implemented.
 package snap
