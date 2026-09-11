@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -31,7 +32,8 @@ func TestVAInquiry_ParsesResponse(t *testing.T) {
       "billDetails":[{"billCode":"01","billNo":"bill-1","billReferenceNo":"BILLREF1"}],
       "freeTexts":[{"english":"note","indonesia":"catatan"}],
       "virtualAccountTrxType":"C",
-      "feeAmount":{"value":"1000.00","currency":"IDR"}
+      "feeAmount":{"value":"1000.00","currency":"IDR"},
+      "additionalInfo":{"channel":"mobilephone"}
    }
 }`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +74,7 @@ func TestVAInquiry_ParsesResponse(t *testing.T) {
 			FreeTexts:             []LocalizedText{{English: "note", Indonesia: "catatan"}},
 			VirtualAccountTrxType: "C",
 			FeeAmount:             &Money{Value: "1000.00", Currency: "IDR"},
+			AdditionalInfo:        json.RawMessage(`{"channel":"mobilephone"}`),
 		},
 	}
 	if !reflect.DeepEqual(resp, want) {
@@ -225,9 +228,9 @@ func TestVAInquiry_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 // enclosing struct), and that VAInquiry surfaces that as an error
 // without sending any HTTP request.
 func TestVAInquiry_MalformedCustomerNoIsMarshalError(t *testing.T) {
-	var requested bool
+	var requested atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requested = true
+		requested.Store(true)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"responseCode":"2002400","responseMessage":"ok"}`))
 	}))
@@ -242,7 +245,7 @@ func TestVAInquiry_MalformedCustomerNoIsMarshalError(t *testing.T) {
 	if err == nil {
 		t.Fatal("VAInquiry() error = nil, want non-nil for malformed CustomerNo JSON")
 	}
-	if requested {
+	if requested.Load() {
 		t.Error("VAInquiry() sent an HTTP request despite a request-encoding failure")
 	}
 }

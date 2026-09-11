@@ -23,6 +23,7 @@ type VAInquiryStatusRequest struct {
 	VirtualAccountNo string          `json:"virtualAccountNo"`
 	InquiryRequestID string          `json:"inquiryRequestId,omitempty"`
 	PaymentRequestID string          `json:"paymentRequestId,omitempty"`
+	AdditionalInfo   json.RawMessage `json:"additionalInfo,omitempty"`
 }
 
 // VAInquiryStatusData is the "virtualAccountData" object in

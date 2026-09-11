@@ -52,6 +52,7 @@ type VAInquiryData struct {
 	FreeTexts             []LocalizedText `json:"freeTexts,omitempty"`
 	VirtualAccountTrxType string          `json:"virtualAccountTrxType,omitempty"`
 	FeeAmount             *Money          `json:"feeAmount,omitempty"`
+	AdditionalInfo        json.RawMessage `json:"additionalInfo,omitempty"`
 }
 
 // VAInquiryResponse is the response body for API VA - VA Inquiry.

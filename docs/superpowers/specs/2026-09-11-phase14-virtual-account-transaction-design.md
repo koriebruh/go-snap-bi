@@ -103,10 +103,16 @@ nested object → pointer, per the `omitempty`-is-a-no-op-on-structs
 rule) + `VirtualAccountName/Email/Phone string` + `InquiryRequestID
 string` + `TotalAmount *Money` + `SubCompany string` + `BillDetails
 []BillDetail` + `FreeTexts []LocalizedText` + `VirtualAccountTrxType
-string` + `FeeAmount *Money`. All fields besides the identity triple
-are unmarked for M/O in §5.3's response summary; treated as Optional
-(omitempty), matching how Phase 11-13 handled response fields with no
-explicit cardinality letter.
+string` + `FeeAmount *Money` + `AdditionalInfo json.RawMessage`. All
+fields besides the identity triple are unmarked for M/O in §5.3's
+response summary; treated as Optional (omitempty), matching how Phase
+11-13 handled response fields with no explicit cardinality letter.
+`AdditionalInfo` is not listed in §5.3's per-endpoint summary for 24
+specifically, but per §3 it is "present on every request/response in
+the group," and every other VA `*Data` type in the package already
+carries it (santa-loop round 1 finding: both reviewers independently
+flagged its absence here as an inconsistency within this same phase —
+`VAInquiryRequest` already has it).
 
 `VAInquiryResponse`: `ResponseCode string`, `ResponseMessage string`,
 `VirtualAccountData *VAInquiryData` (`omitempty`).
@@ -146,7 +152,11 @@ So `VAPaymentData` = identity triple + every `VAPaymentRequest` field
 ### VAInquiryStatus (26)
 
 `VAInquiryStatusRequest`: identity triple + `InquiryRequestID string` C
-(omitempty) + `PaymentRequestID string` O (omitempty).
+(omitempty) + `PaymentRequestID string` O (omitempty) +
+`AdditionalInfo json.RawMessage` O (omitempty) — not listed in §5.3's
+per-endpoint summary for 26 specifically, added per the same §3
+"present on every request/response in the group" rule applied to the
+sibling `VAInquiryData` fix above (santa-loop round 1 finding).
 
 `VAInquiryStatusData`: §5.3 line 146 — "mirrors VA Payment's response
 shape plus `transactionDate Date O`." Per the "distinct types per

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -125,6 +126,7 @@ func TestVAInquiryStatus_RequestBodyRoundTrips(t *testing.T) {
 		VirtualAccountNo: "1234598765",
 		InquiryRequestID: "inq-1",
 		PaymentRequestID: "pay-1",
+		AdditionalInfo:   json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if _, err := VAInquiryStatus(context.Background(), tr, hb, req); err != nil {
 		t.Fatalf("VAInquiryStatus() error = %v", err)
@@ -141,6 +143,10 @@ func TestVAInquiryStatus_RequestBodyRoundTrips(t *testing.T) {
 	}
 	if got["paymentRequestId"] != "pay-1" {
 		t.Errorf(`wire body["paymentRequestId"] = %v, want "pay-1"`, got["paymentRequestId"])
+	}
+	additionalInfo, ok := got["additionalInfo"].(map[string]any)
+	if !ok || additionalInfo["channel"] != "mobilephone" {
+		t.Errorf(`wire body["additionalInfo"] = %v, want {"channel":"mobilephone"}`, got["additionalInfo"])
 	}
 }
 
@@ -198,9 +204,9 @@ func TestVAInquiryStatus_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 // that VAInquiryStatus surfaces that as an error without sending any
 // HTTP request.
 func TestVAInquiryStatus_MalformedCustomerNoIsMarshalError(t *testing.T) {
-	var requested bool
+	var requested atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requested = true
+		requested.Store(true)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"responseCode":"2002600","responseMessage":"ok"}`))
 	}))
@@ -215,7 +221,7 @@ func TestVAInquiryStatus_MalformedCustomerNoIsMarshalError(t *testing.T) {
 	if err == nil {
 		t.Fatal("VAInquiryStatus() error = nil, want non-nil for malformed CustomerNo JSON")
 	}
-	if requested {
+	if requested.Load() {
 		t.Error("VAInquiryStatus() sent an HTTP request despite a request-encoding failure")
 	}
 }

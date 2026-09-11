@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -196,9 +197,9 @@ func TestVAPayment_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 // that VAPayment surfaces that as an error without sending any HTTP
 // request.
 func TestVAPayment_MalformedPaymentTypeIsMarshalError(t *testing.T) {
-	var requested bool
+	var requested atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requested = true
+		requested.Store(true)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"responseCode":"2002500","responseMessage":"ok"}`))
 	}))
@@ -213,7 +214,7 @@ func TestVAPayment_MalformedPaymentTypeIsMarshalError(t *testing.T) {
 	if err == nil {
 		t.Fatal("VAPayment() error = nil, want non-nil for malformed PaymentType JSON")
 	}
-	if requested {
+	if requested.Load() {
 		t.Error("VAPayment() sent an HTTP request despite a request-encoding failure")
 	}
 }
