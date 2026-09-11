@@ -7,14 +7,18 @@ Source: `docs/research/2026-09-11-transfer-kredit-portal-research.md` §5.2.
 
 ## Shared types introduced this phase
 
-`TransferAmount` (`{value string, currency string}`) and
-`TransferOriginatorInfo` (`{originatorCustomerNo, originatorCustomerName,
-originatorBankCode string}`) are defined once in
+`TransferAmount` and `TransferOriginatorInfo` are defined once in
 `transfer_shared_types.go` and reused across the Trigger Transfer
-sub-group (research §3: both are documented as all-String fields, no
-worked-example wire shape recorded in the research doc showing a
-non-string representation, so both fields on `TransferAmount` are
-`string`).
+sub-group. Per research §3, both are documented as all-String fields
+with no worked-example wire shape showing a non-string representation.
+
+| Type.Field | Type | M/O | Go type |
+|---|---|---|---|
+| TransferAmount.Value | String(16,2) | M | `string` |
+| TransferAmount.Currency | String(3, ISO4217) | M | `string` |
+| TransferOriginatorInfo.OriginatorCustomerNo | String(34) | M | `string` |
+| TransferOriginatorInfo.OriginatorCustomerName | String(100) | M | `string` |
+| TransferOriginatorInfo.OriginatorBankCode | String(11) | M | `string` |
 
 ## Ambiguous-type rule applied
 

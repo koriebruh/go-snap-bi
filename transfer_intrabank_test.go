@@ -182,8 +182,9 @@ func TestIntrabankTransfer_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 			t.Errorf(`wire body[%q] = %v, want ""`, key, v)
 		}
 	}
-	if _, ok := got["amount"]; !ok {
-		t.Error(`wire body missing "amount" key; Amount is a plain (non-pointer) struct field and must always be present`)
+	wantAmount := map[string]any{"value": "", "currency": ""}
+	if !reflect.DeepEqual(got["amount"], wantAmount) {
+		t.Errorf(`wire body["amount"] = %v, want %v (Amount is a plain non-pointer struct field, always present with all its own subfields)`, got["amount"], wantAmount)
 	}
 }
 

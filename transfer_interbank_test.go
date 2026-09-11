@@ -124,6 +124,14 @@ func TestInterbankTransfer_RequestBodyRoundTrips(t *testing.T) {
 	if !ok || amount["value"] != "50000.00" || amount["currency"] != "IDR" {
 		t.Errorf(`wire body["amount"] = %v, want {"value":"50000.00","currency":"IDR"}`, got["amount"])
 	}
+	originatorInfos, ok := got["originatorInfos"].([]any)
+	if !ok || len(originatorInfos) != 1 {
+		t.Fatalf(`wire body["originatorInfos"] = %v, want a 1-element array`, got["originatorInfos"])
+	}
+	originator, ok := originatorInfos[0].(map[string]any)
+	if !ok || originator["originatorCustomerNo"] != "cust-1" || originator["originatorCustomerName"] != "John Doe" || originator["originatorBankCode"] != "014" {
+		t.Errorf(`wire body["originatorInfos"][0] = %v, want the test's originator info`, originatorInfos[0])
+	}
 	additionalInfo, ok := got["additionalInfo"].(map[string]any)
 	if !ok || additionalInfo["channel"] != "mobilephone" {
 		t.Errorf(`wire body["additionalInfo"] = %v, want {"channel":"mobilephone"}`, got["additionalInfo"])
@@ -174,8 +182,9 @@ func TestInterbankTransfer_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 			t.Errorf(`wire body[%q] = %v, want ""`, key, v)
 		}
 	}
-	if _, ok := got["amount"]; !ok {
-		t.Error(`wire body missing "amount" key; Amount is a plain (non-pointer) struct field and must always be present`)
+	wantAmount := map[string]any{"value": "", "currency": ""}
+	if !reflect.DeepEqual(got["amount"], wantAmount) {
+		t.Errorf(`wire body["amount"] = %v, want %v (Amount is a plain non-pointer struct field, always present with all its own subfields)`, got["amount"], wantAmount)
 	}
 }
 
