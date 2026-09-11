@@ -12,11 +12,14 @@ import (
 // BankCardNo and CustIDMerchant are the two mandatory fields per the
 // Guides tab.
 //
-// CardData and Limit are typed json.RawMessage rather than string or a
-// numeric type: the Guides tab labels CardData "Encrypted Object" and
-// Limit "decimal", both of which permit a non-string JSON representation
-// (a bare object, a bare number), even though the portal's one worked
-// example renders each as a quoted string.
+// CardData and Limit are typed json.RawMessage: the Guides tab labels
+// CardData "Encrypted Object" and Limit "decimal", each permitting a
+// non-string JSON representation (a bare object, a bare number), even
+// though the portal's one worked example renders both as a quoted string.
+// A caller assigning a plain Go string must quote it first — e.g.
+// json.RawMessage(`"1000000"`), not json.RawMessage(limitStr) — to match
+// the worked example's wire shape; the unquoted form is valid JSON and
+// will be sent as-is, silently diverging from that example.
 type CardRegistrationRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	AccountName        string          `json:"accountName,omitempty"`
@@ -40,7 +43,7 @@ type CardRegistrationRequest struct {
 	Limit              json.RawMessage `json:"limit,omitempty"`
 	MerchantLogoURL    string          `json:"merchantLogoUrl,omitempty"`
 	PhoneNo            string          `json:"phoneNo,omitempty"`
-	SendOtpFlag        string          `json:"sendOtpFlag,omitempty"`
+	SendOTPFlag        string          `json:"sendOtpFlag,omitempty"`
 	Type               string          `json:"type,omitempty"`
 	AdditionalInfo     json.RawMessage `json:"additionalInfo,omitempty"`
 }

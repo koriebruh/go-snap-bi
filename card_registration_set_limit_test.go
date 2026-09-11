@@ -100,7 +100,9 @@ func TestCardRegistrationSetLimit_RequestBodyRoundTrips(t *testing.T) {
 // TestCardRegistrationSetLimit_LimitAcceptsEitherWireShape mirrors
 // TestCardRegistration_LimitAndCardDataAcceptEitherWireShape: the Guides
 // tab labels Limit "decimal", which permits a non-string JSON
-// representation even though the portal's worked example quotes it.
+// representation even though the portal's worked example quotes it. Limit
+// is request-only, so this asserts the captured wire body matches the
+// input shape byte-for-byte, not only that the call succeeded.
 func TestCardRegistrationSetLimit_LimitAcceptsEitherWireShape(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -112,7 +114,16 @@ func TestCardRegistrationSetLimit_LimitAcceptsEitherWireShape(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var gotBody []byte
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				b, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read request body: %v", err)
+				}
+				mu.Lock()
+				gotBody = b
+				mu.Unlock()
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = io.WriteString(w, `{"responseCode":"2000200","responseMessage":"ok"}`)
 			}))
@@ -125,12 +136,18 @@ func TestCardRegistrationSetLimit_LimitAcceptsEitherWireShape(t *testing.T) {
 				BankCardToken: "6d7963617264746f6b656e",
 				Limit:         json.RawMessage(tt.limit),
 			}
-			resp, err := CardRegistrationSetLimit(context.Background(), tr, hb, req)
-			if err != nil {
+			if _, err := CardRegistrationSetLimit(context.Background(), tr, hb, req); err != nil {
 				t.Fatalf("CardRegistrationSetLimit() error = %v, want nil — limit shape must not break the call", err)
 			}
-			if resp.ResponseCode != "2000200" {
-				t.Errorf("ResponseCode = %q, want %q", resp.ResponseCode, "2000200")
+
+			mu.Lock()
+			defer mu.Unlock()
+			var got map[string]json.RawMessage
+			if err := json.Unmarshal(gotBody, &got); err != nil {
+				t.Fatalf("decode request body the server received: %v", err)
+			}
+			if string(got["limit"]) != tt.limit {
+				t.Errorf(`wire body["limit"] = %s, want %s (exact shape sent as given, not normalized)`, got["limit"], tt.limit)
 			}
 		})
 	}

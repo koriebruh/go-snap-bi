@@ -113,21 +113,34 @@ func TestCardRegistration_RequestBodyRoundTrips(t *testing.T) {
 // regression test for CardData/Limit: the Guides tab labels them
 // "Encrypted Object"/"decimal", both of which permit a non-string JSON
 // representation, even though the portal's worked example quotes both.
-// json.RawMessage tolerates every shape without losing the rest of the
-// response, following the same pattern as
-// TestAccountCreation_APIKeyAcceptsEitherWireShape.
+// Both are request-only fields, so the guarantee under test is that
+// json.Marshal accepts every shape and sends it verbatim — unlike
+// TestAccountCreation_APIKeyAcceptsEitherWireShape (a response field,
+// where the risk is decode failure), the risk here is a caller-supplied
+// shape reaching the wire unexamined, so this test asserts the captured
+// request body byte-for-byte rather than only that the call succeeded.
 func TestCardRegistration_LimitAndCardDataAcceptEitherWireShape(t *testing.T) {
 	tests := []struct {
-		name  string
-		limit string
+		name     string
+		limit    string
+		cardData string
 	}{
-		{"quoted string", `"1000000"`},
-		{"unquoted number", `1000000`},
-		{"json null", `null`},
+		{"quoted string", `"1000000"`, `"encrypted-blob"`},
+		{"unquoted number", `1000000`, `{"k":"v"}`},
+		{"json null", `null`, `null`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var gotBody []byte
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				b, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read request body: %v", err)
+				}
+				mu.Lock()
+				gotBody = b
+				mu.Unlock()
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = io.WriteString(w, `{"responseCode":"2000100","responseMessage":"ok","bankCardToken":"tok"}`)
 			}))
@@ -140,13 +153,23 @@ func TestCardRegistration_LimitAndCardDataAcceptEitherWireShape(t *testing.T) {
 				BankCardNo:     "3984029384023984",
 				CustIDMerchant: "0012345679504",
 				Limit:          json.RawMessage(tt.limit),
+				CardData:       json.RawMessage(tt.cardData),
 			}
-			resp, err := CardRegistration(context.Background(), tr, hb, req)
-			if err != nil {
-				t.Fatalf("CardRegistration() error = %v, want nil — limit shape must not break the call", err)
+			if _, err := CardRegistration(context.Background(), tr, hb, req); err != nil {
+				t.Fatalf("CardRegistration() error = %v, want nil — limit/cardData shape must not break the call", err)
 			}
-			if resp.BankCardToken != "tok" {
-				t.Errorf("BankCardToken = %q, want %q", resp.BankCardToken, "tok")
+
+			mu.Lock()
+			defer mu.Unlock()
+			var got map[string]json.RawMessage
+			if err := json.Unmarshal(gotBody, &got); err != nil {
+				t.Fatalf("decode request body the server received: %v", err)
+			}
+			if string(got["limit"]) != tt.limit {
+				t.Errorf(`wire body["limit"] = %s, want %s (exact shape sent as given, not normalized)`, got["limit"], tt.limit)
+			}
+			if string(got["cardData"]) != tt.cardData {
+				t.Errorf(`wire body["cardData"] = %s, want %s (exact shape sent as given, not normalized)`, got["cardData"], tt.cardData)
 			}
 		})
 	}

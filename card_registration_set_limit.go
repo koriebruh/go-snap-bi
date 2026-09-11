@@ -16,7 +16,11 @@ import (
 // Limit is typed json.RawMessage for the same reason as
 // CardRegistrationRequest.Limit: the Guides tab labels it "decimal", which
 // permits a non-string JSON representation even though the portal's one
-// worked example renders it as a quoted string.
+// worked example renders it as a quoted string. A caller assigning a
+// plain Go string must quote it first — e.g. json.RawMessage(`"1000000"`),
+// not json.RawMessage(limitStr) — to match the worked example's wire
+// shape; the unquoted form is valid JSON and will be sent as-is, silently
+// diverging from that example.
 type CardRegistrationSetLimitRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	BankAccountNo      string          `json:"bankAccountNo,omitempty"`
