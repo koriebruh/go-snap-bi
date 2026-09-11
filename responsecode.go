@@ -21,7 +21,9 @@ var (
 	// status-derived fallbacks in transport.go/token.go) for an HTTP-status
 	// class with no dedicated sentinel above — including statuses SNAP's own
 	// table doesn't document (e.g. 429, 502, 520-527) that a proxy, WAF, or
-	// gateway in front of the real server commonly returns. Exported so
+	// gateway in front of the real server commonly returns — and for a
+	// responseCode that doesn't parse at all (wrong length or non-digit
+	// characters), which is equally "no class we can name." Exported so
 	// callers can errors.Is against this bucket instead of losing all
 	// machine-readable signal for exactly the class of error most likely to
 	// come from infrastructure rather than the SNAP server itself.
@@ -80,12 +82,16 @@ func checkResponseStatus(responseCode string, httpStatus int) error {
 	if httpStatus < 200 || httpStatus >= 300 {
 		if responseCode != "" {
 			if err := envelopeError(responseCode); err != nil {
-				// Join the transport-status sentinel on top of whatever
-				// envelopeError produced, so a non-2xx failure is always
-				// errors.Is-matchable via the actual HTTP status — including
-				// when responseCode itself is malformed, where envelopeError
-				// alone returns a plain parse error with no sentinel at all.
-				return fmt.Errorf("%w: %w", sentinelForHTTPStatus(httpStatus), err)
+				// %v, not %w, for err: the transport-level HTTP status is
+				// authoritative (per this function's own contract above), so
+				// only sentinelForHTTPStatus(httpStatus) should be
+				// errors.Is-matchable here. Using %w for both would let a
+				// mismatched body classification (e.g. responseCode says 404
+				// but the transport status is 500) match two different
+				// sentinels at once — err's own text still survives in the
+				// message for a human reading the error, just not as a
+				// second machine-matchable class.
+				return fmt.Errorf("%w: %v", sentinelForHTTPStatus(httpStatus), err)
 			}
 			// responseCode claims success but the transport status
 			// disagrees — the transport status is authoritative; fall

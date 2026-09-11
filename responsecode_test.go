@@ -114,15 +114,23 @@ func TestCheckResponseStatus(t *testing.T) {
 		httpStatus   int
 		wantErr      bool
 		wantErrIs    error // nil means don't check errors.Is, just non-nil/nil
+		wantErrIsNot error // nil means no negative check
 	}{
-		{"2xx status, 2xx-class code: success", "2001200", 200, false, nil},
-		{"2xx status, empty code: success (mandatory-field check is the caller's job)", "", 200, false, nil},
-		{"2xx status, malformed code: error", "abc", 200, true, nil},
-		{"2xx status, 4xx-class code in body: error, not silently accepted", "4001200", 200, true, ErrBadRequest},
-		{"non-2xx status, matching non-2xx code: error via envelopeError", "4001200", 400, true, ErrBadRequest},
-		{"non-2xx status, empty code: error via status fallback", "", 500, true, ErrInternalServerError},
-		{"non-2xx status, 2xx-class code in body: transport status wins, error", "2001200", 500, true, ErrInternalServerError},
-		{"non-2xx status, malformed code: error, still errors.Is-matchable via transport status", "abc", 500, true, ErrInternalServerError},
+		{"2xx status, 2xx-class code: success", "2001200", 200, false, nil, nil},
+		{"2xx status, empty code: success (mandatory-field check is the caller's job)", "", 200, false, nil, nil},
+		{"2xx status, malformed code: error, errors.Is-matchable via ErrUnmappedResponseCode", "abc", 200, true, ErrUnmappedResponseCode, nil},
+		{"2xx status, 4xx-class code in body: error, not silently accepted", "4001200", 200, true, ErrBadRequest, nil},
+		{"non-2xx status, matching non-2xx code: error via envelopeError", "4001200", 400, true, ErrBadRequest, nil},
+		{"non-2xx status, empty code: error via status fallback", "", 500, true, ErrInternalServerError, nil},
+		{"non-2xx status, 2xx-class code in body: transport status wins, error", "2001200", 500, true, ErrInternalServerError, nil},
+		{"non-2xx status, malformed code: error, still errors.Is-matchable via transport status", "abc", 500, true, ErrInternalServerError, nil},
+		// Mismatched-class cases: transport status must win exclusively — the
+		// body's own classification must NOT also match, or a caller's
+		// errors.Is-based dispatch (retry-on-503, refresh-on-401, etc.) could
+		// fire on the wrong condition. A santa-loop finding: an earlier fix
+		// joined both sentinels with %w, so both matched at once.
+		{"mismatch: 500-class code, 400 status — only 400's sentinel matches", "5001200", 400, true, ErrBadRequest, ErrInternalServerError},
+		{"mismatch: 401-class code, 500 status — only 500's sentinel matches", "4011200", 500, true, ErrInternalServerError, ErrUnauthorized},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -135,6 +143,9 @@ func TestCheckResponseStatus(t *testing.T) {
 			}
 			if tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs) {
 				t.Errorf("checkResponseStatus(%q, %d) = %v, want errors.Is match for %v", tt.responseCode, tt.httpStatus, err, tt.wantErrIs)
+			}
+			if tt.wantErrIsNot != nil && errors.Is(err, tt.wantErrIsNot) {
+				t.Errorf("checkResponseStatus(%q, %d) = %v, want errors.Is to NOT match %v (transport status must win exclusively)", tt.responseCode, tt.httpStatus, err, tt.wantErrIsNot)
 			}
 		})
 	}
