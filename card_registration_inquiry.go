@@ -22,6 +22,14 @@ import (
 // boundary, none of which a three-value denylist can enumerate.
 var custIDMerchantPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
+// errInvalidEndpointURL is CardRegistrationInquiry's sentinel for a
+// hb.EndpointURL that isn't a bare http(s) URL with a host — a query
+// string, fragment, userinfo, non-http(s) scheme, or missing host.
+// Exposed via errors.Is so a test (or a caller) can distinguish this
+// rejection from a downstream transport failure that happens to also
+// return a non-nil error for the same malformed input.
+var errInvalidEndpointURL = errors.New("snap: card registration inquiry: EndpointURL must be a bare http(s) URL with a host, no userinfo, and no query string or fragment")
+
 // CardRegistrationInquiryAccountData is the "accountData" object nested
 // inside each API Card Registration Inquiry accountList entry. MaxLimit
 // and CredentialNo are typed string: both are masked/formatted display
@@ -62,25 +70,29 @@ type CardRegistrationInquiryResponse struct {
 // CardRegistrationInquiry sets itself: Method to GET and Body to nil,
 // since this is the package's only read-only GET endpoint and a caller
 // should not need to configure protocol details specific to it.
-// hb.EndpointURL must be an absolute URL with a host and no query string
-// or fragment — CardRegistrationInquiry rejects one that isn't, rather
-// than silently mishandling it (e.g. a fragment is never transmitted by
-// net/http at all, so appending after one would silently drop
-// custIDMerchant from the actual request with no error).
+// hb.EndpointURL must be an http(s) URL with a host, no userinfo, and no
+// query string or fragment — CardRegistrationInquiry rejects one that
+// isn't, rather than silently mishandling it (e.g. a fragment is never
+// transmitted by net/http at all, so appending after one would silently
+// drop custIDMerchant from the actual request with no error).
 //
 // custIDMerchant is validated against custIDMerchantPattern (see its doc
 // comment), then joined onto hb.EndpointURL's path via url.URL.JoinPath
 // — this is the package's first caller input that reaches a URL path
 // rather than a JSON body, and the first place this package parses a URL
-// rather than building one by concatenation. JoinPath (not manual
-// string-building on u.Path, and NOT a separate url.PathEscape call,
-// which would double-escape) both collapses any number of slashes
-// between EndpointURL and "custIdMerchant" to exactly one, and preserves
-// any percent-encoding already present in EndpointURL's path — an
-// earlier version of this function cleared u.RawPath to force
-// re-derivation from the decoded u.Path, which silently turned an
-// encoded "%2F"/"%2E%2E" already in the caller's own EndpointURL into a
-// real path boundary before the request was ever sent.
+// rather than building one by concatenation. JoinPath does NOT "leave
+// RawPath alone": it rebuilds the joined path from u.EscapedPath() and
+// then re-derives both Path and RawPath from that already-escaped
+// string (net/url's setPath). Encoding already present in EndpointURL
+// survives because it's carried through EscapedPath(), not because
+// RawPath is untouched — RawPath is in fact always overwritten. Getting
+// this distinction wrong matters here specifically: an earlier version
+// of this function set u.Path directly (the decoded form) and cleared
+// u.RawPath to force re-derivation FROM THE DECODED PATH, which silently
+// turned an encoded "%2F"/"%2E%2E" already in the caller's own
+// EndpointURL into a real path boundary before the request was ever
+// sent. JoinPath avoids that because it starts from EscapedPath(), not
+// Path.
 func CardRegistrationInquiry(ctx context.Context, t *Transport, hb HeaderBuilder, custIDMerchant string) (CardRegistrationInquiryResponse, error) {
 	if !custIDMerchantPattern.MatchString(custIDMerchant) {
 		return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid custIdMerchant %q", custIDMerchant)
@@ -96,8 +108,9 @@ func CardRegistrationInquiry(ctx context.Context, t *Transport, hb HeaderBuilder
 		}
 		return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid EndpointURL: %w", perr)
 	}
-	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.Host == "" {
-		return CardRegistrationInquiryResponse{}, errors.New("snap: card registration inquiry: EndpointURL must be an absolute URL with a host and no query string or fragment")
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil ||
+		u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" {
+		return CardRegistrationInquiryResponse{}, errInvalidEndpointURL
 	}
 	u = u.JoinPath("custIdMerchant", custIDMerchant)
 

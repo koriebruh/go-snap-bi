@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -90,19 +91,37 @@ func TestCardRegistrationInquiry_URLConstruction(t *testing.T) {
 	}
 }
 
-// TestCardRegistrationInquiry_RejectsQueryOrFragmentEndpointURL is the
-// regression test for a santa-loop finding: string concatenation onto an
-// EndpointURL carrying a fragment silently dropped custIDMerchant from
-// the transmitted request (net/http never sends a URL fragment at all),
-// and one carrying a query string moved the segment into RawQuery
-// instead of Path — neither produced an error, both produced a request
-// to the wrong resource. Parsing hb.EndpointURL and rejecting either
-// case outright closes both silently-wrong outcomes. "?" alone
-// (ForceQuery, an empty query string) and an opaque/hostless URL are
-// included since both bypass a naive RawQuery/Fragment-only check.
-func TestCardRegistrationInquiry_RejectsQueryOrFragmentEndpointURL(t *testing.T) {
-	for _, suffix := range []string{"?trace=1", "#frag", "?"} {
-		t.Run(suffix, func(t *testing.T) {
+// TestCardRegistrationInquiry_RejectsInvalidEndpointURL is the
+// regression test for two santa-loop findings. Round 2: string
+// concatenation onto an EndpointURL carrying a fragment silently dropped
+// custIDMerchant from the transmitted request (net/http never sends a
+// URL fragment at all), and one carrying a query string moved the
+// segment into RawQuery instead of Path — neither produced an error,
+// both produced a request to the wrong resource. Round 3: mutation
+// testing showed the original version of this test only asserted
+// err != nil, so deleting the Opaque/Host guards it was meant to pin
+// left the suite green (the request still failed, just later and for a
+// different reason, at the transport layer). Asserting
+// errors.Is(err, errInvalidEndpointURL) instead ensures each case is
+// actually rejected by CardRegistrationInquiry's own guard, not by
+// net/http failing downstream for an unrelated reason.
+func TestCardRegistrationInquiry_RejectsInvalidEndpointURL(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(base string) string
+	}{
+		{"query string", func(base string) string { return base + "?trace=1" }},
+		{"fragment", func(base string) string { return base + "#frag" }},
+		{"force query, no value", func(base string) string { return base + "?" }},
+		{"opaque (missing slash after scheme)", func(base string) string { return "https:host" + base[len("https://host"):] }},
+		{"non-http(s) scheme", func(base string) string { return "ftp" + base[len("http"):] }},
+		{"scheme-relative (no scheme)", func(base string) string { return base[len("http:"):] }},
+		{"userinfo", func(base string) string {
+			return "http://user:pass@" + base[len("http://"):]
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			var mu sync.Mutex
 			called := false
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -115,11 +134,11 @@ func TestCardRegistrationInquiry_RejectsQueryOrFragmentEndpointURL(t *testing.T)
 			defer server.Close()
 
 			hb := testHeaderBuilder(server.URL)
-			hb.EndpointURL = server.URL + "/v1.0/registration-card-inquiry" + suffix
+			hb.EndpointURL = tt.mutate(server.URL + "/v1.0/registration-card-inquiry")
 			tr := &Transport{}
 			_, err := CardRegistrationInquiry(context.Background(), tr, hb, "cust-1")
-			if err == nil {
-				t.Fatalf("CardRegistrationInquiry() error = nil, want non-nil for EndpointURL ending in %q", suffix)
+			if !errors.Is(err, errInvalidEndpointURL) {
+				t.Fatalf("CardRegistrationInquiry() error = %v, want errors.Is(err, errInvalidEndpointURL) for EndpointURL = %q", err, hb.EndpointURL)
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -127,6 +146,34 @@ func TestCardRegistrationInquiry_RejectsQueryOrFragmentEndpointURL(t *testing.T)
 				t.Error("CardRegistrationInquiry() reached the server despite an invalid EndpointURL; want the request never sent")
 			}
 		})
+	}
+}
+
+// TestCardRegistrationInquiry_CustIDMerchantLengthBoundary pins the
+// allowlist's {1,64} length bound both directions: a santa-loop round 3
+// finding noted the 64-char ceiling was justified in a comment
+// ("generous ... in case some issuer's ID scheme differs") but pinned by
+// no test, so widening or narrowing the quantifier would go unnoticed.
+func TestCardRegistrationInquiry_CustIDMerchantLengthBoundary(t *testing.T) {
+	sixtyFour := strings.Repeat("a", 64)
+	sixtyFive := strings.Repeat("a", 65)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2000300","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/registration-card-inquiry"
+	tr := &Transport{}
+
+	if _, err := CardRegistrationInquiry(context.Background(), tr, hb, sixtyFour); err != nil {
+		t.Errorf("CardRegistrationInquiry() error = %v, want nil for a 64-character custIDMerchant", err)
+	}
+	_, err := CardRegistrationInquiry(context.Background(), tr, hb, sixtyFive)
+	if err == nil {
+		t.Error("CardRegistrationInquiry() error = nil, want non-nil for a 65-character custIDMerchant")
 	}
 }
 
@@ -280,22 +327,17 @@ func TestCardRegistrationInquiry_PreservesEncodedEndpointURLPath(t *testing.T) {
 	}
 }
 
-// TestCardRegistrationInquiry_RejectsOpaqueOrHostlessEndpointURL is the
-// regression test for a santa-loop finding: an EndpointURL like
-// "https:host/v1.0/reg" (a single missing slash) parses with a non-empty
-// Opaque and an empty Path/Host, so JoinPath's appended segment is
-// silently dropped from the URL entirely rather than producing an error.
-func TestCardRegistrationInquiry_RejectsOpaqueOrHostlessEndpointURL(t *testing.T) {
-	for _, endpointURL := range []string{"https:host/v1.0/reg", ""} {
-		t.Run(endpointURL, func(t *testing.T) {
-			hb := testHeaderBuilder("http://unused.invalid")
-			hb.EndpointURL = endpointURL
-			tr := &Transport{}
-			_, err := CardRegistrationInquiry(context.Background(), tr, hb, "cust-1")
-			if err == nil {
-				t.Fatalf("CardRegistrationInquiry() error = nil, want non-nil for EndpointURL = %q", endpointURL)
-			}
-		})
+// TestCardRegistrationInquiry_RejectsEmptyEndpointURL covers the one
+// EndpointURL shape not expressible as a mutation of a valid base URL:
+// url.Parse("") succeeds with every field empty, so it must be caught by
+// the same u.Host == "" guard as an opaque URL, not by url.Parse failing.
+func TestCardRegistrationInquiry_RejectsEmptyEndpointURL(t *testing.T) {
+	hb := testHeaderBuilder("http://unused.invalid")
+	hb.EndpointURL = ""
+	tr := &Transport{}
+	_, err := CardRegistrationInquiry(context.Background(), tr, hb, "cust-1")
+	if !errors.Is(err, errInvalidEndpointURL) {
+		t.Fatalf("CardRegistrationInquiry() error = %v, want errors.Is(err, errInvalidEndpointURL) for an empty EndpointURL", err)
 	}
 }
 
