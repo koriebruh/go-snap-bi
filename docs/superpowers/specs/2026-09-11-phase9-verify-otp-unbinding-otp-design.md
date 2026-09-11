@@ -181,4 +181,8 @@ request field without `omitempty` (`Token`, `JourneyID`), matching the
 pattern Phase 5/6 pinned with a dedicated
 `TestAccountBinding_MerchantIDAlwaysSerialized`-style test — so each
 gets a 6th test asserting that field is always present on the wire, even
-as `""`. 5 + 6 + 6 = 17 tests total.
+as `""`. 6 + 6 + 6 = 18 tests total — `VerifyOTP` picked up a 6th test
+during santa-loop review: `qParamsURL`'s deliberate capital-URL casing
+is response-only and so has no decode-side test that can catch a
+regression (`encoding/json` case-insensitively matches keys on decode),
+so a dedicated marshal-side test pins the literal wire key instead.

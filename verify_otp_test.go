@@ -78,6 +78,25 @@ func TestVerifyOTP_ParsesResponse(t *testing.T) {
 	}
 }
 
+// TestVerifyOTPResponse_QParamsURLMarshalsWithDocumentedCasing pins the
+// deliberate "qParamsURL" (capital URL) wire tag on the marshal side: a
+// decode-only test can't catch a regression to "qParamsUrl" here, since
+// encoding/json's case-insensitive fallback key matching would still
+// populate the field correctly either way.
+func TestVerifyOTPResponse_QParamsURLMarshalsWithDocumentedCasing(t *testing.T) {
+	b, err := json.Marshal(VerifyOTPResponse{ResponseCode: "2000400", ResponseMessage: "ok", QParamsURL: "https://setPin"})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode marshaled response: %v", err)
+	}
+	if _, ok := got["qParamsURL"]; !ok {
+		t.Errorf(`marshaled response missing "qParamsURL" key; got keys: %v`, got)
+	}
+}
+
 func TestVerifyOTP_RequestBodyRoundTrips(t *testing.T) {
 	var mu sync.Mutex
 	var gotBody []byte
@@ -119,6 +138,12 @@ func TestVerifyOTP_RequestBodyRoundTrips(t *testing.T) {
 	}
 	if got["otp"] != "12345678" {
 		t.Errorf(`wire body["otp"] = %v, want "12345678"`, got["otp"])
+	}
+	if got["originalReferenceNo"] != "2020102977770000000009" {
+		t.Errorf(`wire body["originalReferenceNo"] = %v, want "2020102977770000000009"`, got["originalReferenceNo"])
+	}
+	if got["originalPartnerReferenceNo"] != "2020102900000000000001" {
+		t.Errorf(`wire body["originalPartnerReferenceNo"] = %v, want "2020102900000000000001"`, got["originalPartnerReferenceNo"])
 	}
 	if got["chargeToken"] != "TOK_TKNCPPPHUVL3IJVAXZI5GG4WBEC77YZ6::ADVQ" {
 		t.Errorf(`wire body["chargeToken"] = %v, want the test's charge token`, got["chargeToken"])

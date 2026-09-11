@@ -76,8 +76,8 @@ func TestCardRegistrationUnbinding_RequestBodyRoundTrips(t *testing.T) {
 		Token:              "g4JeIz43jfjVvAvNxswe56",
 		BankCardNo:         "2123123123125356",
 		Type:               "Unsubscribe",
-		Part:               "00007100010926",
-		MerchantID:         "00007100010926",
+		Part:               "part-value-1",
+		MerchantID:         "merchant-value-2",
 		SubMerchantID:      "23489182303312",
 		TerminalID:         "310928924949487",
 		TokenRequestorID:   "7127425327776087324915228",
@@ -98,8 +98,11 @@ func TestCardRegistrationUnbinding_RequestBodyRoundTrips(t *testing.T) {
 	if got["token"] != "g4JeIz43jfjVvAvNxswe56" {
 		t.Errorf(`wire body["token"] = %v, want "g4JeIz43jfjVvAvNxswe56"`, got["token"])
 	}
-	if got["part"] != "00007100010926" {
-		t.Errorf(`wire body["part"] = %v, want "00007100010926"`, got["part"])
+	if got["part"] != "part-value-1" {
+		t.Errorf(`wire body["part"] = %v, want "part-value-1"`, got["part"])
+	}
+	if got["merchantId"] != "merchant-value-2" {
+		t.Errorf(`wire body["merchantId"] = %v, want "merchant-value-2"`, got["merchantId"])
 	}
 	additionalInfo, ok := got["additionalInfo"].(map[string]any)
 	if !ok || additionalInfo["channel"] != "mobilephone" {
