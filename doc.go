@@ -16,7 +16,10 @@
 //   - CardRegistration, CardRegistrationSetLimit (docs/superpowers/specs/2026-09-11-phase7-card-registration-set-limit-design.md)
 //   - CardRegistrationInquiry (docs/superpowers/specs/2026-09-11-phase8-card-registration-inquiry-design.md)
 //   - VerifyOTP, CardRegistrationUnbinding, OTP (docs/superpowers/specs/2026-09-11-phase9-verify-otp-unbinding-otp-design.md)
+//   - AccountInquiryInternal, AccountInquiryExternal (docs/superpowers/specs/2026-09-11-phase10-account-inquiry-design.md)
 //
-// Most services (transfer, virtual account, QRIS, direct debit, etc.) are
-// not yet implemented.
+// Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
+// QRIS, etc.) are not yet implemented. See
+// docs/research/2026-09-11-transfer-kredit-portal-research.md for the
+// full Transfer Kredit endpoint inventory.
 package snap
