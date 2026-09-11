@@ -74,6 +74,12 @@ type AccountCreationResponse struct {
 // carry every field HeaderBuilder needs except Body, which AccountCreation
 // sets itself so the exact marshaled bytes are used for both signing and
 // the wire body.
+//
+// This operation is not idempotent and this package does not retry.
+// Callers that retry a failed or timed-out call (e.g. after a network
+// error) should reuse the same X-EXTERNAL-ID, since the server's own
+// duplicate-detection keys on it — a fresh X-EXTERNAL-ID on retry risks
+// creating a second account.
 func AccountCreation(ctx context.Context, t *Transport, hb HeaderBuilder, req AccountCreationRequest) (AccountCreationResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {

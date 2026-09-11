@@ -96,7 +96,9 @@ standing requirements every binding now carries (established across Phase
   regression test proving it actually calls that helper).
 - **Standing requirement**: HTTP 200 with no `responseCode` field must
   error (Phase 3 santa-loop round-1 finding).
-- `APIKey`-specific: both a quoted-string and an unquoted-number wire shape
-  must decode without losing the rest of the response (this phase's own
-  santa-loop round-1 finding, since `apiKey` is the first field in the
-  package with a genuinely ambiguous wire type on the response side).
+- `APIKey`-specific: a quoted-string, an unquoted-number, and a JSON null
+  wire shape (which decodes to a non-nil `RawMessage("null")`, distinct
+  from an absent key) must all decode without losing the rest of the
+  response (this phase's own santa-loop findings, since `apiKey` is the
+  first field in the package with a genuinely ambiguous wire type on the
+  response side).
