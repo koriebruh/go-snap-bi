@@ -86,7 +86,7 @@ func (t *Transport) Do(ctx context.Context, hb HeaderBuilder) (Envelope, error) 
 			// Envelope.StatusCode exists for, just reached from the parse
 			// failure path instead of a successfully-parsed empty
 			// responseCode.
-			return Envelope{}, fmt.Errorf("snap: transport: %w: http status %d: decode response body: %v", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode, err)
+			return Envelope{}, fmt.Errorf("snap: transport: %w: http status %d: decode response body: %w", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode, err)
 		}
 		return Envelope{}, fmt.Errorf("snap: transport: decode response body: %w", err)
 	}

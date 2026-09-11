@@ -313,6 +313,38 @@ func TestTokenManager_AccessTokenB2B_NonTwoXXWithEmptyResponseCode(t *testing.T)
 	}
 }
 
+// TestTokenManager_AccessTokenB2B_NonTwoXXStatusWithTwoXXBodyIsError is the
+// regression test for a santa-loop round-3 HIGH finding: an HTTP 500 whose
+// body claims a successful accessToken response — e.g. a stale cached body
+// from a misbehaving intermediary — used to return (and cache!) a usable
+// token, since envelopeError only inspects the code's own embedded status,
+// never the actual transport status.
+func TestTokenManager_AccessTokenB2B_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `{"responseCode":"2007300","accessToken":"tok1","tokenType":"Bearer","expiresIn":"900"}`)
+	}))
+	defer server.Close()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	m := &TokenManager{BaseURL: server.URL, ClientKey: "client-key", Signer: key}
+
+	tok, err := m.AccessTokenB2B(context.Background())
+	if err == nil {
+		t.Fatalf("AccessTokenB2B() error = nil, want non-nil for HTTP 500 with a 2xx-shaped body; got token = %q", tok)
+	}
+	if !errors.Is(err, ErrInternalServerError) {
+		t.Errorf("AccessTokenB2B() error = %v, want errors.Is(err, ErrInternalServerError)", err)
+	}
+	if tok != "" {
+		t.Errorf("AccessTokenB2B() token = %q, want empty on error", tok)
+	}
+}
+
 // TestTokenManager_AccessTokenB2B_NonTwoXXWithNonJSONBodyIsError is the
 // regression test for a santa-loop round-2 finding: a non-2xx response
 // whose body isn't even JSON (an HTML WAF page, or an empty body from a

@@ -17,10 +17,15 @@ var (
 	ErrServiceUnavailable  = errors.New("snap: service unavailable")
 	ErrTimeout             = errors.New("snap: timeout")
 
-	// errUnmappedResponseCode is returned by ResponseCodeError for an
-	// HTTP-status class with no dedicated sentinel above (e.g. 2xx success
-	// codes, or classes not documented in the standard's table).
-	errUnmappedResponseCode = errors.New("snap: unmapped response code class")
+	// ErrUnmappedResponseCode is returned by ResponseCodeError (and the
+	// status-derived fallbacks in transport.go/token.go) for an HTTP-status
+	// class with no dedicated sentinel above — including statuses SNAP's own
+	// table doesn't document (e.g. 429, 502, 520-527) that a proxy, WAF, or
+	// gateway in front of the real server commonly returns. Exported so
+	// callers can errors.Is against this bucket instead of losing all
+	// machine-readable signal for exactly the class of error most likely to
+	// come from infrastructure rather than the SNAP server itself.
+	ErrUnmappedResponseCode = errors.New("snap: unmapped response code class")
 )
 
 // ParseResponseCode splits a 7-character SNAP responseCode into
@@ -53,7 +58,7 @@ func truncateForError(s string) string {
 // ResponseCodeError parses code and returns the sentinel error matching its
 // HTTP-status class, wrapped with the raw code via %w so callers can recover
 // it while still using errors.Is against the class sentinel. For a class
-// with no matching sentinel, it returns errUnmappedResponseCode wrapped the
+// with no matching sentinel, it returns ErrUnmappedResponseCode wrapped the
 // same way, never nil.
 func ResponseCodeError(code string) error {
 	httpStatus, _, _, err := ParseResponseCode(code)
@@ -61,6 +66,30 @@ func ResponseCodeError(code string) error {
 		return err
 	}
 	return fmt.Errorf("%w: response code %s", sentinelForHTTPStatus(httpStatus), code)
+}
+
+// checkResponseStatus is the authoritative success/failure check for a
+// decoded SNAP response: the transport-level HTTP status always wins over
+// what responseCode claims. A non-2xx HTTP status is never treated as
+// success, even if responseCode's own embedded class says otherwise (e.g. a
+// stale cached body from a misbehaving intermediary, or an out-of-band 500
+// with a templated "success" body) — envelopeError alone cannot catch this,
+// since it only looks at the code's own embedded status, never the
+// transport's actual one.
+func checkResponseStatus(responseCode string, httpStatus int) error {
+	if httpStatus < 200 || httpStatus >= 300 {
+		if responseCode != "" {
+			if err := envelopeError(responseCode); err != nil {
+				return err
+			}
+			// responseCode claims success but the transport status
+			// disagrees — the transport status is authoritative; fall
+			// through to the status-derived sentinel below rather than
+			// trusting the body over the transport.
+		}
+		return fmt.Errorf("%w: http status %d", sentinelForHTTPStatus(httpStatus), httpStatus)
+	}
+	return envelopeError(responseCode)
 }
 
 // sentinelForHTTPStatus maps an HTTP status to the sentinel error for its
@@ -84,6 +113,6 @@ func sentinelForHTTPStatus(httpStatus int) error {
 	case 504:
 		return ErrTimeout
 	default:
-		return errUnmappedResponseCode
+		return ErrUnmappedResponseCode
 	}
 }

@@ -171,18 +171,14 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 			// A non-JSON body (HTML WAF page, empty body, etc.) on a
 			// non-2xx response must still be errors.Is-matchable via the
 			// HTTP status, not just an opaque decode error.
-			return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w: http status %d: decode response body: %v", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode, err)
+			return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w: http status %d: decode response body: %w", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode, err)
 		}
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: decode response body: %w", err)
 	}
-	if parsed.ResponseCode == "" && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
-		// The body didn't carry a responseCode (a differently-shaped error
-		// body, or a proxy/WAF error page) but the transport-level status
-		// still says this failed — fall back to a status-derived sentinel
-		// rather than treating an empty responseCode as success.
-		return accessTokenResponse{}, fmt.Errorf("%w: http status %d", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode)
-	}
-	if err := envelopeError(parsed.ResponseCode); err != nil {
+	if err := checkResponseStatus(parsed.ResponseCode, resp.StatusCode); err != nil {
+		// checkResponseStatus is authoritative on the transport status: a
+		// non-2xx HTTP status is never treated as success, even if the body
+		// claims a 2xx-class responseCode.
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w", err)
 	}
 	if parsed.AccessToken == "" {

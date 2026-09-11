@@ -193,6 +193,51 @@ func TestBalanceInquiry_NonTwoXXWithNoResponseCodeIsError(t *testing.T) {
 	}
 }
 
+// TestBalanceInquiry_NonTwoXXStatusWithTwoXXBodyIsError is the regression
+// test for a santa-loop round-3 HIGH finding: an HTTP 500 (or any non-2xx
+// status) whose body claims a 2xx-class responseCode — e.g. a stale cached
+// body from a misbehaving intermediary — used to be returned as a
+// successful, fully-populated response, since envelopeError only inspects
+// the code's own embedded status, never the actual transport status.
+func TestBalanceInquiry_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(standardWorkedExampleBalanceInquiryResponse)) // responseCode "2001100"
+	}))
+	defer server.Close()
+
+	tr := &Transport{}
+	resp, err := BalanceInquiry(context.Background(), tr, testHeaderBuilder(server.URL), BalanceInquiryRequest{AccountNo: "123"})
+	if err == nil {
+		t.Fatalf("BalanceInquiry() error = nil, want non-nil for HTTP 500 with a 2xx-shaped body; got %+v", resp)
+	}
+	if !errors.Is(err, ErrInternalServerError) {
+		t.Errorf("BalanceInquiry() error = %v, want errors.Is(err, ErrInternalServerError)", err)
+	}
+}
+
+// TestBalanceInquiry_UnmappedStatusIsErrorsIsMatchable is the regression
+// test for the exported ErrUnmappedResponseCode: a gateway status SNAP's
+// own table doesn't document (502, the canonical proxy/gateway error) must
+// still be errors.Is-matchable, not just a non-nil opaque error.
+func TestBalanceInquiry_UnmappedStatusIsErrorsIsMatchable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("<html>502 Bad Gateway</html>"))
+	}))
+	defer server.Close()
+
+	tr := &Transport{}
+	_, err := BalanceInquiry(context.Background(), tr, testHeaderBuilder(server.URL), BalanceInquiryRequest{AccountNo: "123"})
+	if err == nil {
+		t.Fatal("BalanceInquiry() error = nil, want non-nil for a 502 response")
+	}
+	if !errors.Is(err, ErrUnmappedResponseCode) {
+		t.Errorf("BalanceInquiry() error = %v, want errors.Is(err, ErrUnmappedResponseCode)", err)
+	}
+}
+
 // TestBalanceInquiry_NonTwoXXWithNonJSONBodyIsError is the regression test
 // for a santa-loop round-2 finding: a non-2xx response whose body isn't
 // even JSON (an HTML WAF page, or an empty body from a load balancer) used

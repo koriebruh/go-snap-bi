@@ -69,14 +69,11 @@ func BalanceInquiry(ctx context.Context, t *Transport, hb HeaderBuilder, req Bal
 	if err != nil {
 		return BalanceInquiryResponse{}, err
 	}
-	if env.ResponseCode == "" && (env.StatusCode < 200 || env.StatusCode >= 300) {
-		// The body didn't carry a responseCode (e.g. a proxy/WAF error page)
-		// but the transport-level status still says this failed — fall back
-		// to a status-derived sentinel so errors.Is still works, mirroring
-		// TokenManager's identical fallback in token.go.
-		return BalanceInquiryResponse{}, fmt.Errorf("snap: balance inquiry: %w: http status %d", sentinelForHTTPStatus(env.StatusCode), env.StatusCode)
-	}
-	if err := envelopeError(env.ResponseCode); err != nil {
+	if err := checkResponseStatus(env.ResponseCode, env.StatusCode); err != nil {
+		// checkResponseStatus is authoritative on the transport status: a
+		// non-2xx HTTP status is never treated as success, even if the body
+		// claims a 2xx-class responseCode (e.g. a stale cached body from a
+		// misbehaving intermediary).
 		return BalanceInquiryResponse{}, fmt.Errorf("snap: balance inquiry: %w", err)
 	}
 
