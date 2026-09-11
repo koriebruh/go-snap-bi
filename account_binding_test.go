@@ -50,7 +50,7 @@ func TestAccountBinding_ParsesResponse(t *testing.T) {
 		ReferenceNo:        "2020102977770000000009",
 		PartnerReferenceNo: "2020102900000000000001",
 		AccountToken:       "acct-token-123",
-		BindingAccessTokenInfo: &BindingAccessTokenInfo{
+		AccessTokenInfo: &BindingAccessTokenInfo{
 			AccessToken:  "at-1",
 			ExpiresIn:    "2026-01-01T00:00:00Z",
 			RefreshToken: "rt-1",
@@ -64,7 +64,7 @@ func TestAccountBinding_ParsesResponse(t *testing.T) {
 		PinWebViewURL:      "https://example.com/pin",
 		RedirectToDeeplink: "app://deeplink",
 		RedirectURL:        "https://example.com/redirect",
-		BindingUserInfo:    &BindingUserInfo{PublicUserID: "user-123"},
+		UserInfo:           &BindingUserInfo{PublicUserID: "user-123"},
 		AdditionalInfo:     json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if !reflect.DeepEqual(resp, want) {
@@ -94,7 +94,7 @@ func TestAccountBinding_RequestBodyRoundTrips(t *testing.T) {
 	req := AccountBindingRequest{
 		PartnerReferenceNo: "ref-1",
 		MerchantID:         "merchant-1",
-		BindingSuccessParams: &BindingSuccessParams{
+		SuccessParams: &BindingSuccessParams{
 			AccountID:        "acct-1",
 			TerminalID:       "term-1",
 			TokenRequestorID: "tr-1",

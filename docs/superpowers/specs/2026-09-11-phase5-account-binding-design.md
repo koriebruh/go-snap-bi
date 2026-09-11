@@ -11,23 +11,26 @@ partnerReferenceNo, action, additionalData (object, thin spec — modeled as
 isBindAndPay, lang, locale, merchantId (**M**), subMerchantId, msisdn, otp,
 phoneNo, platformType, redirectUrl, referenceId, refreshToken,
 successParams (object with `accountId`, `terminalId`, `tokenRequestorId` —
-typed as a proper nested struct `SuccessParams`, unlike `additionalData`
+typed as a proper nested struct `BindingSuccessParams`, unlike `additionalData`
 which has no field breakdown at all), additionalInfo.
 
 ## Response body
 
 responseCode (M), responseMessage (M), referenceNo (C), partnerReferenceNo,
-accountToken, accessTokenInfo (object: `accessToken`, `expiresIn`,
-`refreshToken`, `reExpiresIn`, `tokenStatus` — typed nested struct
-`AccessTokenInfo`), linkId, nextAction, linkageToken, params (object, thin
-spec — `json.RawMessage`), pinWebViewUrl, redirectToDeeplink, redirectUrl,
-userInfo (object: `publicUserId` — typed nested struct `UserInfo`),
-additionalInfo.
+accountToken, accessTokenInfo (object: `accessToken`, `expiresIn` and
+`reExpiresIn` — Guides tab types these "Datetime of token expiration,
+Format: ISO 8601", **not** the seconds-count string TokenManager's
+`ExpiresIn` uses for the separate B2B/B2B2C access-token endpoints; same
+field name, different endpoint, different meaning — `refreshToken`,
+`tokenStatus` — typed nested struct `BindingAccessTokenInfo`), linkId,
+nextAction, linkageToken, params (object, thin spec — `json.RawMessage`),
+pinWebViewUrl, redirectToDeeplink, redirectUrl, userInfo (object:
+`publicUserId` — typed nested struct `BindingUserInfo`), additionalInfo.
 
 ## Design
 
-New file `account_binding.go`. Types: `SuccessParams`, `AccessTokenInfo`,
-`UserInfo`, `AccountBindingRequest`, `AccountBindingResponse`. One function
+New file `account_binding.go`. Types: `BindingSuccessParams`, `BindingAccessTokenInfo`,
+`BindingUserInfo`, `AccountBindingRequest`, `AccountBindingResponse`. One function
 `AccountBinding(ctx, t, hb, req) (AccountBindingResponse, error)`, identical
 shape to prior bindings (marshal once, `hb.Body`, `t.Do`,
 `checkResponseStatus`, decode, reject empty `responseCode`).
