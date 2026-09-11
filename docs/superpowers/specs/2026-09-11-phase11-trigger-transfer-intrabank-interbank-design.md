@@ -5,17 +5,25 @@ Phase 2-10 pattern, no shared-code changes to Transport/checkResponseStatus.
 Opens the Trigger Transfer sub-group of Transfer Kredit.
 Source: `docs/research/2026-09-11-transfer-kredit-portal-research.md` §5.2.
 
-## Shared types introduced this phase
+## Shared types
 
-`TransferAmount` and `TransferOriginatorInfo` are defined once in
-`transfer_shared_types.go` and reused across the Trigger Transfer
-sub-group. Per research §3, both are documented as all-String fields
-with no worked-example wire shape showing a non-string representation.
+The `amount`-shaped `{value, currency}` object reuses the existing
+`Money` type from `balance_inquiry.go` (Phase 2) rather than
+introducing a new type — `Money`'s own doc comment already declares it
+"the shared {value, currency} amount shape used across every
+per-service response that carries a monetary value", and
+`transaction_history.go` already reuses it (Phase 3's design doc:
+"Reuses Money from Phase 2"). Research §3's `Amount` object matches
+`Money` field-for-field.
+
+`TransferOriginatorInfo` is new this phase — no existing type in the
+package matches its shape — defined once in `transfer_shared_types.go`
+and reused across the Trigger Transfer sub-group.
 
 | Type.Field | Type | M/O | Go type |
 |---|---|---|---|
-| TransferAmount.Value | String(16,2) | M | `string` |
-| TransferAmount.Currency | String(3, ISO4217) | M | `string` |
+| Money.Value | String(16,2) | M | `string` |
+| Money.Currency | String(3, ISO4217) | M | `string` |
 | TransferOriginatorInfo.OriginatorCustomerNo | String(34) | M | `string` |
 | TransferOriginatorInfo.OriginatorCustomerName | String(100) | M | `string` |
 | TransferOriginatorInfo.OriginatorBankCode | String(11) | M | `string` |
@@ -34,7 +42,7 @@ Path `.../{version}/transfer-intrabank`. POST.
 | Field | Type | M/O/C | Go type |
 |---|---|---|---|
 | partnerReferenceNo | String | M | `string` |
-| amount | Object | M | `TransferAmount` |
+| amount | Object | M | `Money` |
 | beneficiaryAccountNo | String(34) | M | `string` |
 | beneficiaryEmail | String | O | `string` |
 | currency | String | O | `string` |
@@ -48,31 +56,42 @@ Path `.../{version}/transfer-intrabank`. POST.
 
 ### Response body
 
-| Field | Type | M/O | Go type |
+Research §5.2's response line for this endpoint marks only
+`referenceNo` (C) and `partnerReferenceNo` (O) explicitly; every field
+after that (`amount`, `beneficiaryAccountNo`, `currency`,
+`customerReference`, `sourceAccountNo`, `transactionDate`,
+`originatorInfos`, `additionalInfo`) is listed with no M/O marker in the
+source. Recorded here as unmarked, not asserted as Optional — the code
+treats them as Optional (`omitempty`) as the safe default absent a
+stated marker, consistent with every other unmarked trailing field the
+package has encountered so far.
+
+| Field | Type | M/O (source marking) | Go type |
 |---|---|---|---|
 | responseCode | String | M | `string` |
 | responseMessage | String | M | `string` |
 | referenceNo | String(64) | C | `string` |
 | partnerReferenceNo | String | O | `string` |
-| amount | Object | O | `*TransferAmount` |
-| beneficiaryAccountNo | String | O | `string` |
-| currency | String | O | `string` |
-| customerReference | String | O | `string` |
-| sourceAccountNo | String | O | `string` |
-| transactionDate | String | O | `string` |
-| originatorInfos | Array of Object | O | `[]TransferOriginatorInfo` |
-| additionalInfo | Object | O | `json.RawMessage` |
+| amount | Object | unmarked | `*Money` |
+| beneficiaryAccountNo | String | unmarked | `string` |
+| currency | String | unmarked | `string` |
+| customerReference | String | unmarked | `string` |
+| sourceAccountNo | String | unmarked | `string` |
+| transactionDate | String | unmarked | `string` |
+| originatorInfos | Array of Object | unmarked | `[]TransferOriginatorInfo` |
+| additionalInfo | Object | unmarked | `json.RawMessage` |
 
 `ReferenceNo` is Conditional per the Guides tab; per the package's
 established convention (e.g. Phase 9's `CardRegistrationUnbindingResponse`
 Conditional fields), Conditional response fields carry `omitempty` the
 same as Optional.
 
-`Amount` is `TransferAmount` (plain struct, always sent) on the
-Mandatory request field and `*TransferAmount` (pointer, `omitempty`) on
-the Optional response field — `encoding/json`'s `omitempty` has no
-effect on a non-pointer struct value, so an Optional nested-object field
-needs a pointer to actually be omittable, matching the existing
+`Amount` is `Money` (plain struct, always sent) on the Mandatory
+request field and `*Money` (pointer, `omitempty`) on the response
+field, which the code treats as Optional per the unmarked-field
+convention above — `encoding/json`'s `omitempty` has no effect on a
+non-pointer struct value, so an omittable nested-object field needs a
+pointer, matching the existing
 `AccountBindingResponse.AccessTokenInfo *BindingAccessTokenInfo` pattern.
 
 ## Endpoint 2: Interbank Transfer (Service Code 18)
@@ -91,10 +110,10 @@ Adds `traceNo String(16) O`.
 
 ## Design
 
-Three new files:
+Two new files:
 
-- `transfer_shared_types.go`: `TransferAmount`, `TransferOriginatorInfo`
-  — no functions, just the two shared structs.
+- `transfer_shared_types.go`: `TransferOriginatorInfo` — no functions,
+  just the shared struct.
 - `transfer_intrabank.go`: `IntrabankTransferRequest`,
   `IntrabankTransferResponse`, `IntrabankTransfer(ctx, t, hb, req)`.
 - `transfer_interbank.go`: `InterbankTransferRequest`,
@@ -109,16 +128,18 @@ Both functions get the package's standard non-idempotency doc comment.
 
 ## Testing (mechanical precedent checks)
 
-- `PartnerReferenceNo`, `BeneficiaryAccountNo`, `SourceAccountNo`,
-  `TransactionDate` are the four mandatory `IntrabankTransferRequest`
-  fields without `omitempty` — covered by one
+- `PartnerReferenceNo`, `Amount`, `BeneficiaryAccountNo`,
+  `SourceAccountNo`, `TransactionDate` are the five mandatory
+  `IntrabankTransferRequest` fields without `omitempty` — covered by one
   `TestIntrabankTransfer_MandatoryFieldsAlwaysSerialized` test (keyed
-  loop, matching `TestCardRegistration_MandatoryFieldsAlwaysSerialized`).
+  loop for the string fields plus a full-shape assertion on `Amount`,
+  matching `TestCardRegistration_MandatoryFieldsAlwaysSerialized`).
 - `InterbankTransferRequest` adds `BeneficiaryAccountName` and
-  `BeneficiaryBankCode` to that same mandatory set — its own
-  `TestInterbankTransfer_MandatoryFieldsAlwaysSerialized` covers all six.
+  `BeneficiaryBankCode` to that same mandatory set (seven fields total)
+  — its own `TestInterbankTransfer_MandatoryFieldsAlwaysSerialized`
+  covers all seven.
 - Every response struct field appears in each endpoint's
-  `ParsesResponse` fixture, including the nested `TransferAmount` and
+  `ParsesResponse` fixture, including the nested `Money` and
   `[]TransferOriginatorInfo` fields.
 - Standard 5-test core pattern per endpoint, plus the
   AlwaysSerialized test: 6 tests per endpoint, 12 total.

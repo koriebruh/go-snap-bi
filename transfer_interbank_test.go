@@ -39,7 +39,7 @@ func TestInterbankTransfer_ParsesResponse(t *testing.T) {
 	tr := &Transport{}
 	resp, err := InterbankTransfer(context.Background(), tr, hb, InterbankTransferRequest{
 		PartnerReferenceNo:     "2020102900000000000001",
-		Amount:                 TransferAmount{Value: "50000.00", Currency: "IDR"},
+		Amount:                 Money{Value: "50000.00", Currency: "IDR"},
 		BeneficiaryAccountNo:   "1234567890",
 		BeneficiaryAccountName: "Jane Doe",
 		BeneficiaryBankCode:    "014",
@@ -55,7 +55,7 @@ func TestInterbankTransfer_ParsesResponse(t *testing.T) {
 		ResponseMessage:      "Request has been processed successfully",
 		ReferenceNo:          "2020102977770000000009",
 		PartnerReferenceNo:   "2020102900000000000001",
-		Amount:               &TransferAmount{Value: "50000.00", Currency: "IDR"},
+		Amount:               &Money{Value: "50000.00", Currency: "IDR"},
 		BeneficiaryAccountNo: "1234567890",
 		Currency:             "IDR",
 		CustomerReference:    "cust-ref-1",
@@ -93,7 +93,7 @@ func TestInterbankTransfer_RequestBodyRoundTrips(t *testing.T) {
 	tr := &Transport{}
 	req := InterbankTransferRequest{
 		PartnerReferenceNo:     "2020102900000000000001",
-		Amount:                 TransferAmount{Value: "50000.00", Currency: "IDR"},
+		Amount:                 Money{Value: "50000.00", Currency: "IDR"},
 		BeneficiaryAccountNo:   "1234567890",
 		BeneficiaryAccountName: "Jane Doe",
 		BeneficiaryBankCode:    "014",
@@ -139,10 +139,11 @@ func TestInterbankTransfer_RequestBodyRoundTrips(t *testing.T) {
 }
 
 // TestInterbankTransfer_MandatoryFieldsAlwaysSerialized pins that
-// PartnerReferenceNo, BeneficiaryAccountNo, BeneficiaryAccountName,
-// BeneficiaryBankCode, SourceAccountNo, and TransactionDate — the
-// request fields without omitempty — are always present on the wire,
-// even as "", mirroring TestCardRegistration_MandatoryFieldsAlwaysSerialized.
+// PartnerReferenceNo, Amount, BeneficiaryAccountNo,
+// BeneficiaryAccountName, BeneficiaryBankCode, SourceAccountNo, and
+// TransactionDate — the seven request fields without omitempty — are
+// always present on the wire, even as their zero value, mirroring
+// TestCardRegistration_MandatoryFieldsAlwaysSerialized.
 func TestInterbankTransfer_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 	var mu sync.Mutex
 	var gotBody []byte

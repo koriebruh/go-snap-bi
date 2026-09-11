@@ -13,7 +13,7 @@ import (
 // OriginatorInfos is Conditional.
 type IntrabankTransferRequest struct {
 	PartnerReferenceNo   string                   `json:"partnerReferenceNo"`
-	Amount               TransferAmount           `json:"amount"`
+	Amount               Money                    `json:"amount"`
 	BeneficiaryAccountNo string                   `json:"beneficiaryAccountNo"`
 	BeneficiaryEmail     string                   `json:"beneficiaryEmail,omitempty"`
 	Currency             string                   `json:"currency,omitempty"`
@@ -33,7 +33,7 @@ type IntrabankTransferResponse struct {
 	ResponseMessage      string                   `json:"responseMessage"`
 	ReferenceNo          string                   `json:"referenceNo,omitempty"`
 	PartnerReferenceNo   string                   `json:"partnerReferenceNo,omitempty"`
-	Amount               *TransferAmount          `json:"amount,omitempty"`
+	Amount               *Money                   `json:"amount,omitempty"`
 	BeneficiaryAccountNo string                   `json:"beneficiaryAccountNo,omitempty"`
 	Currency             string                   `json:"currency,omitempty"`
 	CustomerReference    string                   `json:"customerReference,omitempty"`

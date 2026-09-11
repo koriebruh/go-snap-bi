@@ -38,7 +38,7 @@ func TestIntrabankTransfer_ParsesResponse(t *testing.T) {
 	tr := &Transport{}
 	resp, err := IntrabankTransfer(context.Background(), tr, hb, IntrabankTransferRequest{
 		PartnerReferenceNo:   "2020102900000000000001",
-		Amount:               TransferAmount{Value: "50000.00", Currency: "IDR"},
+		Amount:               Money{Value: "50000.00", Currency: "IDR"},
 		BeneficiaryAccountNo: "1234567890",
 		SourceAccountNo:      "9876543210",
 		TransactionDate:      "2020-12-21T14:56:11+07:00",
@@ -52,7 +52,7 @@ func TestIntrabankTransfer_ParsesResponse(t *testing.T) {
 		ResponseMessage:      "Request has been processed successfully",
 		ReferenceNo:          "2020102977770000000009",
 		PartnerReferenceNo:   "2020102900000000000001",
-		Amount:               &TransferAmount{Value: "50000.00", Currency: "IDR"},
+		Amount:               &Money{Value: "50000.00", Currency: "IDR"},
 		BeneficiaryAccountNo: "1234567890",
 		Currency:             "IDR",
 		CustomerReference:    "cust-ref-1",
@@ -89,7 +89,7 @@ func TestIntrabankTransfer_RequestBodyRoundTrips(t *testing.T) {
 	tr := &Transport{}
 	req := IntrabankTransferRequest{
 		PartnerReferenceNo:   "2020102900000000000001",
-		Amount:               TransferAmount{Value: "50000.00", Currency: "IDR"},
+		Amount:               Money{Value: "50000.00", Currency: "IDR"},
 		BeneficiaryAccountNo: "1234567890",
 		SourceAccountNo:      "9876543210",
 		TransactionDate:      "2020-12-21T14:56:11+07:00",
@@ -139,9 +139,9 @@ func TestIntrabankTransfer_RequestBodyRoundTrips(t *testing.T) {
 }
 
 // TestIntrabankTransfer_MandatoryFieldsAlwaysSerialized pins that
-// PartnerReferenceNo, BeneficiaryAccountNo, SourceAccountNo, and
-// TransactionDate — the request fields without omitempty — are always
-// present on the wire, even as "", mirroring
+// PartnerReferenceNo, Amount, BeneficiaryAccountNo, SourceAccountNo, and
+// TransactionDate — the five request fields without omitempty — are
+// always present on the wire, even as their zero value, mirroring
 // TestCardRegistration_MandatoryFieldsAlwaysSerialized.
 func TestIntrabankTransfer_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 	var mu sync.Mutex
