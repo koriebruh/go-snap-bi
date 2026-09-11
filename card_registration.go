@@ -21,18 +21,20 @@ import (
 // json.RawMessage(`"`+cardDataBase64+`"`), not
 // json.RawMessage(cardDataBase64) — to match the worked examples' wire
 // shape. Getting this wrong is NOT always caught by json.Marshal: if the
-// unquoted value happens to itself be valid JSON (e.g. Limit set to the
-// bare digits 1000000, or a numeric-looking CardData), it marshals fine
-// as that JSON type and is sent as a bare number/object — silently
-// diverging from the worked example's quoted-string shape, with no
-// error. Only a value that is not valid JSON on its own (a
-// comma-formatted decimal, a base64 blob starting with a letter, or any
-// other string that isn't itself a JSON number/object/literal) fails
-// json.Marshal and returns an "encode request" error before any request
-// is sent. Two other shapes: an empty json.RawMessage is dropped by
-// omitempty (the field is absent from the wire body, not sent empty),
-// while json.RawMessage("null") is NOT dropped — it is sent as an
-// explicit "limit":null / "cardData":null, since omitempty only skips a
+// unquoted value happens to itself be a complete, valid JSON value (e.g.
+// Limit set to the bare digits "1000000", with no leading zero — JSON
+// numbers forbid leading zeros, so "01000000" fails instead), it marshals
+// fine as that JSON type and is sent as a bare number/object/string —
+// silently diverging from the worked example's quoted-string shape, with
+// no error. Only a value that is not itself a valid JSON value (a
+// comma-formatted decimal, a base64 blob starting with a letter, a
+// digit string with a leading zero) fails json.Marshal and returns an
+// "encode request" error before any request is sent — this is a
+// narrower, less reliable safety net than it looks, not a guarantee.
+// Two other shapes: an empty json.RawMessage is dropped by omitempty
+// (the field is absent from the wire body, not sent empty), while
+// json.RawMessage("null") is NOT dropped — it is sent as an explicit
+// "limit":null / "cardData":null, since omitempty only skips a
 // zero-length slice.
 type CardRegistrationRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`

@@ -211,10 +211,12 @@ func TestCardRegistration_NonNumericUnquotedLimitFailsEncode(t *testing.T) {
 
 // TestCardRegistration_InvalidCardDataFailsEncode mirrors
 // TestCardRegistration_NonNumericUnquotedLimitFailsEncode for CardData:
-// a base64 blob starting with a letter is not a valid JSON value token
-// (not because of any specific character in it — an all-digit blob would
-// marshal fine as a bare number instead, silently), so json.Marshal fails
-// on this one and the request is never sent.
+// this blob starts with a letter, so it is not a valid JSON value token
+// on its own, and json.Marshal fails. This is specific to this blob, not
+// a property of "base64" in general: a same-shape blob that happened to
+// be all digits with no leading zero would marshal fine as a bare
+// number instead, silently — the failure/success boundary here is
+// "is this string a complete JSON value", not "is this a base64 blob".
 func TestCardRegistration_InvalidCardDataFailsEncode(t *testing.T) {
 	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
