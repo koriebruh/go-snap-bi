@@ -18,6 +18,14 @@ typo). POST.
 | partnerReferenceNo | String | O | `string` |
 | additionalInfo | Object | O | `json.RawMessage` (thin spec, no field breakdown) |
 
+Neither the Guides tab's field table nor `AccountBindingInquiryRequest`
+defines an account identifier field, and the portal's worked example
+carries only a plain B2B `Authorization` header — how a given PJP
+identifies which account to report is not specified here (a santa-loop
+round-2 finding rejected an earlier, unsupported claim that this was
+resolved via a B2B2C access token; that mechanism isn't documented for
+this specific endpoint, so this doc states only what's verifiable).
+
 ### Response body
 
 | Field | Guides tab type | Mandatory | Go type | Notes |
@@ -55,9 +63,9 @@ Path `.../{version}/registration-account-unbinding`. POST.
 
 Note on the M/O split: `merchantId` is the only Mandatory field; `linkId`
 and `tokenId` — the fields that would actually identify *which* binding to
-remove — are both Optional per the Guides tab, and the standard doesn't
-explain server-side resolution when only `merchantId` is given. Following
-the package's established stance (`balance_inquiry.go`'s precedent: this
+remove — are both Optional per the Guides tab. This M/O split is the
+standard's own ambiguity, not a gap this package fills. Following the
+package's established stance (`balance_inquiry.go`'s precedent: this
 package does not enforce business rules beyond the wire shape, the server
 validates and rejects), `AccountUnbindingRequest` does not add a Go-level
 check requiring `linkId` or `tokenId` — this is documented here so a future

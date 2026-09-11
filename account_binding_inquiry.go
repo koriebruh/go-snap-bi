@@ -9,11 +9,12 @@ import (
 
 // AccountBindingInquiryRequest is the request body for API Account Binding
 // Inquiry (Service Code 08, path .../{version}/registration-account-inquiry
-// — note the URL segment drops the word "binding", per the portal). It
-// carries no account identifier itself; per the standard's B2B2C flow this
-// endpoint is part of, the account context is supplied by the customer's
-// access token (see BalanceInquiryRequest for the same B2B2C-token-as-context
-// pattern elsewhere in this package), not by a request body field.
+// — note the URL segment drops the word "binding", per the portal). Neither
+// the Guides tab's field table nor this type defines an account identifier
+// field, and the portal's worked example carries only a plain B2B
+// Authorization header — how a given PJP identifies which account to
+// report is not specified here; a caller whose PJP needs a consumer
+// identifier for this call places it in AdditionalInfo.
 type AccountBindingInquiryRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	AdditionalInfo     json.RawMessage `json:"additionalInfo,omitempty"`

@@ -11,11 +11,11 @@ import (
 // (Service Code 09, path .../{version}/registration-account-unbinding).
 // MerchantID is the only mandatory field per the Guides tab; LinkID and
 // TokenID — the fields that would actually identify which binding to
-// remove — are both Optional, and the standard doesn't document server-side
-// resolution when only MerchantID is set. This type does not enforce that
-// at least one of LinkID/TokenID is present: the server validates and
-// rejects, matching this package's established stance (see
-// BalanceInquiryRequest).
+// remove — are both Optional. The Guides tab's M/O split is the standard's
+// own ambiguity here, not a gap this package fills: this type does not
+// enforce that at least one of LinkID/TokenID is present, matching this
+// package's established stance (see BalanceInquiryRequest) that the
+// server validates business rules the wire shape alone doesn't capture.
 type AccountUnbindingRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	LinkID             string          `json:"linkId,omitempty"`
