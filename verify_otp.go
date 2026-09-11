@@ -29,6 +29,12 @@ type VerifyOTPRequest struct {
 // tab's description for this field ("Random String to generate
 // validation for webview") doesn't match its name, and the worked
 // example holds a random-string-looking value, not an actual timestamp.
+//
+// QParamsURL's wire tag is "qParamsURL" (capital URL), per the portal's
+// own worked example — unlike every other URL field elsewhere in this
+// package (redirectUrl, merchantLogoUrl, pinWebViewUrl), which use
+// lowercase "Url". Kept exactly as the source shows it, not "corrected"
+// to match sibling endpoints' casing.
 type VerifyOTPResponse struct {
 	ResponseCode               string          `json:"responseCode"`
 	ResponseMessage            string          `json:"responseMessage"`
@@ -46,7 +52,7 @@ type VerifyOTPResponse struct {
 	PhoneNo                    string          `json:"phoneNo,omitempty"`
 	QParamsURL                 string          `json:"qParamsURL,omitempty"`
 	QParams                    json.RawMessage `json:"qParams,omitempty"`
-	SendOtpFlag                string          `json:"sendOtpFlag,omitempty"`
+	SendOTPFlag                string          `json:"sendOtpFlag,omitempty"`
 	SubscribeDatetime          string          `json:"subscribeDatetime,omitempty"`
 	TokenExpiryTime            string          `json:"tokenExpiryTime,omitempty"`
 	TransactionTimestamp       string          `json:"transactionTimestamp,omitempty"`

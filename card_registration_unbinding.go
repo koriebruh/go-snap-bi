@@ -54,6 +54,14 @@ type CardRegistrationUnbindingResponse struct {
 // HeaderBuilder needs except Body, which CardRegistrationUnbinding sets
 // itself so the exact marshaled bytes are used for both signing and the
 // wire body.
+//
+// This operation is not idempotent and this package does not retry.
+// Callers that retry a failed or timed-out call should reuse the same
+// X-EXTERNAL-ID, since the server's own duplicate-detection keys on it
+// — matching AccountUnbinding's stance, which carries the same note
+// despite also minting nothing: the note is about server-side duplicate
+// detection on a mutating call, not specifically about minting a new
+// resource.
 func CardRegistrationUnbinding(ctx context.Context, t *Transport, hb HeaderBuilder, req CardRegistrationUnbindingRequest) (CardRegistrationUnbindingResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {

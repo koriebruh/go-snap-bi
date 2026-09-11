@@ -146,11 +146,18 @@ Three new files, each following the Phase 2-7 shape exactly:
   `CardRegistrationUnbindingResponse`, `CardRegistrationUnbinding(ctx, t, hb, req)`.
 - `otp.go`: `OTPRequest`, `OTPResponse`, `OTP(ctx, t, hb, req)`.
 
-No idempotency notes: none of the three source pages document one, and
-none of the three mints a new long-lived resource the way
-`AccountCreation`/`AccountBinding`/`CardRegistration` do — `chargeToken`
-(OTP) and `bankCardToken` (Verify OTP's response) are short-lived
-verification artifacts, not account/card bindings.
+Idempotency notes, corrected from an earlier draft of this doc (a
+go-review finding): the original reasoning here — that none of the
+three mints a new long-lived resource, so none needs the note — doesn't
+survive `AccountUnbinding`'s own precedent, which carries the note
+despite also minting nothing. The note is about server-side duplicate
+detection on a mutating call, not specifically about minting.
+`CardRegistrationUnbinding` gets the note, matching its exact structural
+sibling `AccountUnbinding`. `OTP` gets the note too: it triggers a real
+external side effect (an OTP delivery), so a retry under a fresh
+X-EXTERNAL-ID risks a duplicate delivery. `VerifyOTP` does not: it
+neither mints a resource nor triggers an external side effect, only
+checks an already-issued OTP.
 
 ## Testing
 

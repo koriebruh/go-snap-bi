@@ -67,7 +67,7 @@ func TestVerifyOTP_ParsesResponse(t *testing.T) {
 		PhoneNo:                    "0899345678864332",
 		QParamsURL:                 "https://setPin",
 		QParams:                    json.RawMessage(`{"action":"otpLinkage"}`),
-		SendOtpFlag:                "YES",
+		SendOTPFlag:                "YES",
 		SubscribeDatetime:          "2017-02-24T14:12:25.871+07:00",
 		TokenExpiryTime:            "2017-02-24T14:12:25.871+07:00",
 		TransactionTimestamp:       "g4BoEz43jfjVvAvN",

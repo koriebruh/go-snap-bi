@@ -18,6 +18,7 @@ func TestCardRegistrationUnbinding_ParsesResponse(t *testing.T) {
    "responseMessage":"Request has been processed successfully",
    "referenceNo":"2020102977770000000009",
    "partnerReferenceNo":"2020102900000000000001",
+   "message":"Card unbinding successful",
    "customerId":"ae75e364134cdb2c7a4159106e38ca6b761983859dbv1",
    "unsubscribeDate":"2020-12-17T13:50:04+07:00",
    "additionalInfo":{"channel":"mobilephone"}
@@ -41,6 +42,7 @@ func TestCardRegistrationUnbinding_ParsesResponse(t *testing.T) {
 		ResponseMessage:    "Request has been processed successfully",
 		ReferenceNo:        "2020102977770000000009",
 		PartnerReferenceNo: "2020102900000000000001",
+		Message:            "Card unbinding successful",
 		CustomerID:         "ae75e364134cdb2c7a4159106e38ca6b761983859dbv1",
 		UnsubscribeDate:    "2020-12-17T13:50:04+07:00",
 		AdditionalInfo:     json.RawMessage(`{"channel":"mobilephone"}`),

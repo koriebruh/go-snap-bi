@@ -25,7 +25,12 @@ import (
 // tab (the only Conditional-marked field found across the researched
 // Registrasi group); it carries omitempty the same as every Optional
 // field, since the field's presence rather than its JSON tag is what
-// makes it conditional.
+// makes it conditional. TrxDateTime is typed string despite being
+// labeled "Date" (a unique type label in this whole document — every
+// other date-like field elsewhere is labeled "String"): JSON has no
+// date primitive, and the worked example is a plain quoted ISO-8601
+// string, so string is unambiguous regardless of the unique label —
+// same reasoning as CardRegistrationUnbindingResponse.UnsubscribeDate.
 type OTPRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	JourneyID          string          `json:"journeyId"`
@@ -57,6 +62,12 @@ type OTPResponse struct {
 // carry every field HeaderBuilder needs except Body, which OTP sets
 // itself so the exact marshaled bytes are used for both signing and the
 // wire body.
+//
+// This operation triggers a real external side effect (an OTP
+// delivery, e.g. SMS) and this package does not retry. Callers that
+// retry a failed or timed-out call should reuse the same X-EXTERNAL-ID,
+// since the server's own duplicate-detection keys on it — a fresh
+// X-EXTERNAL-ID on retry risks a duplicate OTP delivery.
 func OTP(ctx context.Context, t *Transport, hb HeaderBuilder, req OTPRequest) (OTPResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
