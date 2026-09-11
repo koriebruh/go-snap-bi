@@ -19,7 +19,7 @@
 //   - AccountInquiryInternal, AccountInquiryExternal (docs/superpowers/specs/2026-09-11-phase10-account-inquiry-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
-// QRIS, etc.) are not yet implemented. See
+// etc.) are not yet implemented. See
 // docs/research/2026-09-11-transfer-kredit-portal-research.md for the
 // full Transfer Kredit endpoint inventory.
 package snap

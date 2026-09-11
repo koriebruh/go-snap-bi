@@ -68,10 +68,8 @@ Two new files, each following the Phase 2-9 shape exactly:
 
 Neither function carries a non-idempotency doc comment, matching
 BalanceInquiry, TransactionHistoryList, AccountBindingInquiry, and
-CardRegistrationInquiry — the note appears only on
-account_creation.go, card_registration.go, account_unbinding.go,
-card_registration_unbinding.go, and verify_otp.go, and on none of the
-package's inquiry endpoints.
+CardRegistrationInquiry — the note appears on the package's mutating
+endpoints and on none of its inquiry endpoints.
 
 ## Testing (mechanical precedent checks)
 
