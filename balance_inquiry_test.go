@@ -33,9 +33,11 @@ const standardWorkedExampleBalanceInquiryResponse = `{
          "ledgerBalance":{"value":"30000.00","currency":"IDR"},
          "currentMultilateralLimit":{"value":"10000.00","currency":"IDR"},
          "registrationStatusCode":"0001",
-         "status":"0001"
+         "status":"0001",
+         "additionalInfo":{"note":"per-account"}
       }
-   ]
+   ],
+   "additionalInfo":{"deviceId":"12345679237","channel":"mobilephone"}
 }`
 
 func testHeaderBuilder(serverURL string) HeaderBuilder {
@@ -68,37 +70,34 @@ func TestBalanceInquiry_ParsesWorkedExampleResponse(t *testing.T) {
 		t.Fatalf("BalanceInquiry() error = %v", err)
 	}
 
-	if resp.ResponseCode != "2001100" {
-		t.Errorf("ResponseCode = %q, want %q", resp.ResponseCode, "2001100")
+	// Compare the entire decoded response against a literal expected value —
+	// not a hand-picked subset — so a typo'd json tag on any field,
+	// including ResponseMessage and AdditionalInfo, can't pass silently.
+	want := BalanceInquiryResponse{
+		ResponseCode:       "2001100",
+		ResponseMessage:    "Request has been processed successfully",
+		ReferenceNo:        "2020102977770000000009",
+		PartnerReferenceNo: "2020102900000000000001",
+		AccountNo:          "115471119",
+		Name:               "JONOMADE",
+		AccountInfos: []AccountInfo{
+			{
+				BalanceType:              "Cash",
+				Amount:                   Money{Value: "200000.00", Currency: "IDR"},
+				FloatAmount:              Money{Value: "50000.00", Currency: "IDR"},
+				HoldAmount:               Money{Value: "20000.00", Currency: "IDR"},
+				AvailableBalance:         Money{Value: "130000.00", Currency: "IDR"},
+				LedgerBalance:            Money{Value: "30000.00", Currency: "IDR"},
+				CurrentMultilateralLimit: Money{Value: "10000.00", Currency: "IDR"},
+				RegistrationStatusCode:   "0001",
+				Status:                   "0001",
+				AdditionalInfo:           json.RawMessage(`{"note":"per-account"}`),
+			},
+		},
+		AdditionalInfo: json.RawMessage(`{"deviceId":"12345679237","channel":"mobilephone"}`),
 	}
-	if resp.AccountNo != "115471119" {
-		t.Errorf("AccountNo = %q, want %q", resp.AccountNo, "115471119")
-	}
-	if resp.Name != "JONOMADE" {
-		t.Errorf("Name = %q, want %q", resp.Name, "JONOMADE")
-	}
-	if len(resp.AccountInfos) != 1 {
-		t.Fatalf("len(AccountInfos) = %d, want 1", len(resp.AccountInfos))
-	}
-	want := AccountInfo{
-		BalanceType:              "Cash",
-		Amount:                   Money{Value: "200000.00", Currency: "IDR"},
-		FloatAmount:              Money{Value: "50000.00", Currency: "IDR"},
-		HoldAmount:               Money{Value: "20000.00", Currency: "IDR"},
-		AvailableBalance:         Money{Value: "130000.00", Currency: "IDR"},
-		LedgerBalance:            Money{Value: "30000.00", Currency: "IDR"},
-		CurrentMultilateralLimit: Money{Value: "10000.00", Currency: "IDR"},
-		RegistrationStatusCode:   "0001",
-		Status:                   "0001",
-	}
-	// Compare every field, not just a hand-picked few — a typo'd json tag on
-	// any field (e.g. ledgerBalance) would otherwise pass silently.
-	// reflect.DeepEqual (not !=) because AdditionalInfo is a json.RawMessage
-	// ([]byte), which isn't comparable via ==.
-	got := resp.AccountInfos[0]
-	got.AdditionalInfo = nil // not present in the fixture; exclude from comparison
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("AccountInfos[0] = %+v, want %+v", got, want)
+	if !reflect.DeepEqual(resp, want) {
+		t.Errorf("BalanceInquiry() = %+v, want %+v", resp, want)
 	}
 }
 
@@ -123,6 +122,7 @@ func TestBalanceInquiry_RequestBodyRoundTrips(t *testing.T) {
 		PartnerReferenceNo: "ref-1",
 		AccountNo:          "123456",
 		BalanceTypes:       []string{"Cash", "Coins"},
+		AdditionalInfo:     json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if _, err := BalanceInquiry(context.Background(), tr, testHeaderBuilder(server.URL), req); err != nil {
 		t.Fatalf("BalanceInquiry() error = %v", err)
@@ -148,6 +148,10 @@ func TestBalanceInquiry_RequestBodyRoundTrips(t *testing.T) {
 	balanceTypes, ok := got["balanceTypes"].([]any)
 	if !ok || len(balanceTypes) != 2 || balanceTypes[0] != "Cash" || balanceTypes[1] != "Coins" {
 		t.Errorf(`wire body["balanceTypes"] = %v, want ["Cash" "Coins"]`, got["balanceTypes"])
+	}
+	additionalInfo, ok := got["additionalInfo"].(map[string]any)
+	if !ok || additionalInfo["channel"] != "mobilephone" {
+		t.Errorf(`wire body["additionalInfo"] = %v, want {"channel":"mobilephone"}`, got["additionalInfo"])
 	}
 }
 
@@ -190,6 +194,28 @@ func TestBalanceInquiry_NonTwoXXWithNoResponseCodeIsError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrInternalServerError) {
 		t.Errorf("BalanceInquiry() error = %v, want errors.Is(err, ErrInternalServerError)", err)
+	}
+}
+
+// TestBalanceInquiry_TwoXXStatusWithNoResponseCodeIsError is the binding-
+// level regression test for a santa-loop finding: the "HTTP 200, but the
+// JSON body itself carries no responseCode" path was previously reachable
+// only in theory — every other no-responseCode test in the package pairs
+// it with a non-2xx HTTP status, so this exact branch (the final guard in
+// BalanceInquiry, checkResponseStatus's 2xx passthrough) had never once
+// been exercised at HTTP 200.
+func TestBalanceInquiry_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// No WriteHeader call: httptest defaults to 200.
+		_, _ = w.Write([]byte(`{"accountNo":"123"}`)) // valid JSON, no responseCode field
+	}))
+	defer server.Close()
+
+	tr := &Transport{}
+	resp, err := BalanceInquiry(context.Background(), tr, testHeaderBuilder(server.URL), BalanceInquiryRequest{AccountNo: "123"})
+	if err == nil {
+		t.Fatalf("BalanceInquiry() error = nil, want non-nil; got zero-value response = %+v", resp)
 	}
 }
 

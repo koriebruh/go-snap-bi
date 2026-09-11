@@ -130,8 +130,11 @@ func envelopeError(responseCode string) error {
 		// No "snap: <subsystem>:" prefix here: this is a shared helper used
 		// by every per-service binding, not just TokenManager, and every
 		// caller already wraps this with its own "snap: <subsystem>: %w" —
-		// adding one here would double it up.
-		return fmt.Errorf("response carries malformed response code: %w", err)
+		// adding one here would double it up. Wrapped with ErrUnmappedResponseCode
+		// so a malformed code is still errors.Is-matchable to *something*
+		// on the 2xx path (checkResponseStatus's non-2xx path additionally
+		// joins the transport-status sentinel on top of this).
+		return fmt.Errorf("%w: response carries malformed response code: %w", ErrUnmappedResponseCode, err)
 	}
 	if httpStatus >= 200 && httpStatus < 300 {
 		return nil
