@@ -1,6 +1,6 @@
 # go-snap-bi: Phase 6 — Account Binding Inquiry & Account Unbinding (Registrasi)
 
-Status: draft, same pattern as Phase 2-5. Scope: two endpoints, the remaining
+Status: implemented, same pattern as Phase 2-5. Scope: two endpoints, the remaining
 two legs of the Account Binding trio (bind → inquire → unbind) that Phase 5
 started. Both flat responses, no accessTokenInfo/userInfo nesting like
 Account Binding (07) has.
