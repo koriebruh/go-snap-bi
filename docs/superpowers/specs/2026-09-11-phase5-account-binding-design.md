@@ -34,8 +34,19 @@ shape to prior bindings (marshal once, `hb.Body`, `t.Do`,
 
 ## Testing
 
-Same 6-test pattern established by Phase 4 (full-struct DeepEqual with
-populated AdditionalInfo, wire-body round-trip, non-2xx-responseCode,
-non-2xx-status-with-2xx-body, 2xx-status-with-no-responseCode) plus nested
-struct coverage for `AccessTokenInfo`/`UserInfo`/`SuccessParams` in the
-response test.
+5 tests, not Phase 4's 6: same standing-requirement pattern (full-struct
+DeepEqual with populated AdditionalInfo, wire-body round-trip,
+non-2xx-responseCode, non-2xx-status-with-2xx-body,
+2xx-status-with-no-responseCode) plus nested struct coverage for
+`BindingAccessTokenInfo`/`BindingUserInfo`/`BindingSuccessParams` in the
+response test. No 6th test: Phase 4's extra test was `APIKey`-specific
+(an ambiguous-wire-type regression); Account Binding has no comparably
+ambiguous scalar field.
+
+## Naming note
+
+`BindingSuccessParams`/`BindingAccessTokenInfo`/`BindingUserInfo` are
+prefixed `Binding` (go-review finding): Account Binding Inquiry and Account
+Unbinding (future phases, same service group) will plausibly have their
+own differently-shaped `successParams`/`userInfo` objects, and an
+unprefixed name would collide in this flat package.

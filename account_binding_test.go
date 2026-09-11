@@ -50,7 +50,7 @@ func TestAccountBinding_ParsesResponse(t *testing.T) {
 		ReferenceNo:        "2020102977770000000009",
 		PartnerReferenceNo: "2020102900000000000001",
 		AccountToken:       "acct-token-123",
-		AccessTokenInfo: &AccessTokenInfo{
+		BindingAccessTokenInfo: &BindingAccessTokenInfo{
 			AccessToken:  "at-1",
 			ExpiresIn:    "2026-01-01T00:00:00Z",
 			RefreshToken: "rt-1",
@@ -64,7 +64,7 @@ func TestAccountBinding_ParsesResponse(t *testing.T) {
 		PinWebViewURL:      "https://example.com/pin",
 		RedirectToDeeplink: "app://deeplink",
 		RedirectURL:        "https://example.com/redirect",
-		UserInfo:           &UserInfo{PublicUserID: "user-123"},
+		BindingUserInfo:    &BindingUserInfo{PublicUserID: "user-123"},
 		AdditionalInfo:     json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if !reflect.DeepEqual(resp, want) {
@@ -94,11 +94,12 @@ func TestAccountBinding_RequestBodyRoundTrips(t *testing.T) {
 	req := AccountBindingRequest{
 		PartnerReferenceNo: "ref-1",
 		MerchantID:         "merchant-1",
-		SuccessParams: &SuccessParams{
+		BindingSuccessParams: &BindingSuccessParams{
 			AccountID:        "acct-1",
 			TerminalID:       "term-1",
 			TokenRequestorID: "tr-1",
 		},
+		AdditionalData: json.RawMessage(`{"deviceId":"12345"}`),
 		AdditionalInfo: json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if _, err := AccountBinding(context.Background(), tr, hb, req); err != nil {
@@ -124,6 +125,10 @@ func TestAccountBinding_RequestBodyRoundTrips(t *testing.T) {
 	additionalInfo, ok := got["additionalInfo"].(map[string]any)
 	if !ok || additionalInfo["channel"] != "mobilephone" {
 		t.Errorf(`wire body["additionalInfo"] = %v, want {"channel":"mobilephone"}`, got["additionalInfo"])
+	}
+	additionalData, ok := got["additionalData"].(map[string]any)
+	if !ok || additionalData["deviceId"] != "12345" {
+		t.Errorf(`wire body["additionalData"] = %v, want {"deviceId":"12345"}`, got["additionalData"])
 	}
 }
 
