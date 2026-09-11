@@ -127,7 +127,10 @@ func envelopeError(responseCode string) error {
 	}
 	httpStatus, _, _, err := ParseResponseCode(responseCode)
 	if err != nil {
-		return fmt.Errorf("snap: token manager: response carries malformed response code: %w", err)
+		// No "token manager"-specific prefix here: this is a shared helper
+		// used by every per-service binding, not just TokenManager. Callers
+		// that want subsystem context wrap this error themselves.
+		return fmt.Errorf("snap: response carries malformed response code: %w", err)
 	}
 	if httpStatus >= 200 && httpStatus < 300 {
 		return nil
@@ -173,7 +176,7 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 		return accessTokenResponse{}, fmt.Errorf("%w: http status %d", sentinelForHTTPStatus(resp.StatusCode), resp.StatusCode)
 	}
 	if err := envelopeError(parsed.ResponseCode); err != nil {
-		return accessTokenResponse{}, err
+		return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w", err)
 	}
 	if parsed.AccessToken == "" {
 		return accessTokenResponse{}, errors.New("snap: token manager: response has no accessToken")

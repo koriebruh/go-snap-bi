@@ -17,10 +17,18 @@ const defaultHTTPTimeout = 30 * time.Second
 // misbehaving or malicious server can't force unbounded memory use.
 const maxResponseBytes = 10 << 20 // 10 MiB
 
-// Envelope is the generic decoded response body for a SNAP request. Phase 1
-// has no per-service typed responses yet, so callers unmarshal Raw
-// themselves once they know which service they called.
+// Envelope is the generic decoded response body for a SNAP request, plus
+// the transport-level HTTP status. Per-service bindings (in this same
+// package) unmarshal Raw into their own typed response.
+//
+// StatusCode matters because ResponseCode is only reliable when the server
+// actually returned SNAP's own error shape — a body from a proxy, WAF, or
+// gateway in front of it may carry no ResponseCode at all. A per-service
+// binding with no ResponseCode to fall back on should use
+// sentinelForHTTPStatus(env.StatusCode) in that case, the same pattern
+// TokenManager already uses internally.
 type Envelope struct {
+	StatusCode      int
 	ResponseCode    string
 	ResponseMessage string
 	Raw             json.RawMessage
@@ -74,6 +82,7 @@ func (t *Transport) Do(ctx context.Context, hb HeaderBuilder) (Envelope, error) 
 	}
 
 	return Envelope{
+		StatusCode:      resp.StatusCode,
 		ResponseCode:    parsed.ResponseCode,
 		ResponseMessage: parsed.ResponseMessage,
 		Raw:             json.RawMessage(body),

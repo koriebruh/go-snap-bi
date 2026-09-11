@@ -170,11 +170,11 @@ func TestBalanceInquiry_NonTwoXXResponseCodeIsError(t *testing.T) {
 }
 
 // TestBalanceInquiry_NonTwoXXWithNoResponseCodeIsError is the regression
-// test for a go-review finding: a non-2xx HTTP response whose body doesn't
-// carry a responseCode field at all (e.g. a proxy/WAF error page) was
-// previously returned as a "successful" zero-value BalanceInquiryResponse
-// with a nil error, since Transport.Do intentionally doesn't interpret HTTP
-// status, and envelopeError("") returns nil by design.
+// test for a go-review finding (and a santa-loop finding that the fix
+// should be errors.Is-matchable via env.StatusCode, not just non-nil): a
+// non-2xx HTTP response whose body doesn't carry a responseCode field at
+// all (e.g. a proxy/WAF error page) was previously returned as a
+// "successful" zero-value BalanceInquiryResponse with a nil error.
 func TestBalanceInquiry_NonTwoXXWithNoResponseCodeIsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -187,5 +187,8 @@ func TestBalanceInquiry_NonTwoXXWithNoResponseCodeIsError(t *testing.T) {
 	resp, err := BalanceInquiry(context.Background(), tr, testHeaderBuilder(server.URL), BalanceInquiryRequest{AccountNo: "123"})
 	if err == nil {
 		t.Fatalf("BalanceInquiry() error = nil, want non-nil; got zero-value response = %+v", resp)
+	}
+	if !errors.Is(err, ErrInternalServerError) {
+		t.Errorf("BalanceInquiry() error = %v, want errors.Is(err, ErrInternalServerError)", err)
 	}
 }

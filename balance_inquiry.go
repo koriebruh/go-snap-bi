@@ -30,9 +30,10 @@ type AccountInfo struct {
 }
 
 // BalanceInquiryRequest is the request body for API Balance Inquiry
-// (Service Code 11). Exactly one of BankCardToken or AccountNo must be set
-// (per the standard, unless a B2B2C customer token supplies the account
-// context instead).
+// (Service Code 11). Per the standard, exactly one of BankCardToken or
+// AccountNo is expected to be set (unless a B2B2C customer token supplies
+// the account context instead) — this type does not enforce that itself,
+// the server validates and rejects an inquiry that omits both.
 type BalanceInquiryRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	BankCardToken      string          `json:"bankCardToken,omitempty"`
@@ -68,8 +69,15 @@ func BalanceInquiry(ctx context.Context, t *Transport, hb HeaderBuilder, req Bal
 	if err != nil {
 		return BalanceInquiryResponse{}, err
 	}
+	if env.ResponseCode == "" && (env.StatusCode < 200 || env.StatusCode >= 300) {
+		// The body didn't carry a responseCode (e.g. a proxy/WAF error page)
+		// but the transport-level status still says this failed — fall back
+		// to a status-derived sentinel so errors.Is still works, mirroring
+		// TokenManager's identical fallback in token.go.
+		return BalanceInquiryResponse{}, fmt.Errorf("snap: balance inquiry: %w: http status %d", sentinelForHTTPStatus(env.StatusCode), env.StatusCode)
+	}
 	if err := envelopeError(env.ResponseCode); err != nil {
-		return BalanceInquiryResponse{}, err
+		return BalanceInquiryResponse{}, fmt.Errorf("snap: balance inquiry: %w", err)
 	}
 
 	var resp BalanceInquiryResponse
