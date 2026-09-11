@@ -29,9 +29,11 @@ const standardWorkedExampleTransactionHistoryListResponse = `{
             {"source":"BALANCE","amount":{"value":"10000.00","currency":"IDR"}}
          ],
          "status":"SUCCESS",
-         "type":"PAYMENT"
+         "type":"PAYMENT",
+         "additionalInfo":{"note":"per-transaction"}
       }
-   ]
+   ],
+   "additionalInfo":{"deviceId":"12345679237","channel":"mobilephone"}
 }`
 
 func TestTransactionHistoryList_ParsesWorkedExampleResponse(t *testing.T) {
@@ -68,17 +70,12 @@ func TestTransactionHistoryList_ParsesWorkedExampleResponse(t *testing.T) {
 				SourceOfFunds: []SourceOfFund{
 					{Source: "BALANCE", Amount: Money{Value: "10000.00", Currency: "IDR"}},
 				},
-				Status: "SUCCESS",
-				Type:   "PAYMENT",
+				Status:         "SUCCESS",
+				Type:           "PAYMENT",
+				AdditionalInfo: json.RawMessage(`{"note":"per-transaction"}`),
 			},
 		},
-	}
-	// AdditionalInfo is absent from the fixture at both levels; zero it on
-	// the decoded value so a nil-vs-empty-RawMessage mismatch (an encoding
-	// quirk, not a bug) doesn't fail the comparison.
-	resp.AdditionalInfo = nil
-	if len(resp.DetailData) == 1 {
-		resp.DetailData[0].AdditionalInfo = nil
+		AdditionalInfo: json.RawMessage(`{"deviceId":"12345679237","channel":"mobilephone"}`),
 	}
 	if !reflect.DeepEqual(resp, want) {
 		t.Errorf("TransactionHistoryList() = %+v, want %+v", resp, want)
@@ -110,6 +107,7 @@ func TestTransactionHistoryList_RequestBodyRoundTrips(t *testing.T) {
 		ToDateTime:         "2019-07-04T12:08:56+07:00",
 		PageSize:           "10",
 		PageNumber:         "2",
+		AdditionalInfo:     json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if _, err := TransactionHistoryList(context.Background(), tr, hb, req); err != nil {
 		t.Fatalf("TransactionHistoryList() error = %v", err)
@@ -135,6 +133,10 @@ func TestTransactionHistoryList_RequestBodyRoundTrips(t *testing.T) {
 	}
 	if got["pageNumber"] != "2" {
 		t.Errorf(`wire body["pageNumber"] = %v, want "2"`, got["pageNumber"])
+	}
+	additionalInfo, ok := got["additionalInfo"].(map[string]any)
+	if !ok || additionalInfo["channel"] != "mobilephone" {
+		t.Errorf(`wire body["additionalInfo"] = %v, want {"channel":"mobilephone"}`, got["additionalInfo"])
 	}
 }
 

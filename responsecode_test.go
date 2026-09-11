@@ -122,7 +122,7 @@ func TestCheckResponseStatus(t *testing.T) {
 		{"non-2xx status, matching non-2xx code: error via envelopeError", "4001200", 400, true, ErrBadRequest},
 		{"non-2xx status, empty code: error via status fallback", "", 500, true, ErrInternalServerError},
 		{"non-2xx status, 2xx-class code in body: transport status wins, error", "2001200", 500, true, ErrInternalServerError},
-		{"non-2xx status, malformed code: error", "abc", 500, true, nil},
+		{"non-2xx status, malformed code: error, still errors.Is-matchable via transport status", "abc", 500, true, ErrInternalServerError},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

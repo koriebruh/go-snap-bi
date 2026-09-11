@@ -80,7 +80,12 @@ func checkResponseStatus(responseCode string, httpStatus int) error {
 	if httpStatus < 200 || httpStatus >= 300 {
 		if responseCode != "" {
 			if err := envelopeError(responseCode); err != nil {
-				return err
+				// Join the transport-status sentinel on top of whatever
+				// envelopeError produced, so a non-2xx failure is always
+				// errors.Is-matchable via the actual HTTP status — including
+				// when responseCode itself is malformed, where envelopeError
+				// alone returns a plain parse error with no sentinel at all.
+				return fmt.Errorf("%w: %w", sentinelForHTTPStatus(httpStatus), err)
 			}
 			// responseCode claims success but the transport status
 			// disagrees — the transport status is authoritative; fall
