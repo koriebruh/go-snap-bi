@@ -18,9 +18,10 @@ type BindingSuccessParams struct {
 // BindingAccessTokenInfo is the response-side "accessTokenInfo" object for
 // Account Binding. ExpiresIn/ReExpiresIn here are ISO 8601 datetime strings
 // per the Guides tab ("Datetime of token expiration. Format: ISO 8601") —
-// deliberately not the same shape as TokenManager's ExpiresIn (a
-// seconds-count string, per the separate B2B/B2B2C access-token endpoints
-// in token.go). Same field name, different endpoint, different meaning.
+// deliberately not the same shape as Token.ExpiresIn (a time.Duration
+// parsed from a seconds-count string, per the separate B2B/B2B2C
+// access-token endpoints in token.go). Same field name, different
+// endpoint, different meaning.
 type BindingAccessTokenInfo struct {
 	AccessToken  string `json:"accessToken,omitempty"`
 	ExpiresIn    string `json:"expiresIn,omitempty"`

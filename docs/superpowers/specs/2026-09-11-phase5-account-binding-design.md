@@ -14,6 +14,17 @@ successParams (object with `accountId`, `terminalId`, `tokenRequestorId` —
 typed as a proper nested struct `BindingSuccessParams`, unlike `additionalData`
 which has no field breakdown at all), additionalInfo.
 
+### Ambiguous-type fields
+
+Two request fields read as booleans but Guides tab types them as string,
+no worked example given, same judgment call as Phase 4's `APIKey`
+(record the source type, don't silently guess):
+
+| Field | Guides tab type | Chosen Go type | Rationale |
+|---|---|---|---|
+| `isBindAndPay` | String | `string` | Guides tab lists type "String", not "Boolean" — likely wire values are the literal strings `"Y"`/`"N"` or `"true"`/`"false"` rather than a JSON boolean; typing it `bool` would hard-fail decode if the server sends a quoted string, same risk class as Phase 4's `APIKey`. |
+| `platformType` | String | `string` | Guides tab lists type "String" (enumerated values like `IOS`/`ANDROID`/`WEB`, not documented exhaustively) — plain string, no ambiguity. |
+
 ## Response body
 
 responseCode (M), responseMessage (M), referenceNo (C), partnerReferenceNo,
@@ -41,8 +52,9 @@ shape to prior bindings (marshal once, `hb.Body`, `t.Do`,
 DeepEqual with populated AdditionalInfo, wire-body round-trip,
 non-2xx-responseCode, non-2xx-status-with-2xx-body,
 2xx-status-with-no-responseCode) plus nested struct coverage for
-`BindingAccessTokenInfo`/`BindingUserInfo`/`BindingSuccessParams` in the
-response test. No 6th test: Phase 4's extra test was `APIKey`-specific
+`BindingAccessTokenInfo`/`BindingUserInfo` in the response test, and
+`BindingSuccessParams` (request-side only) in the wire-body round-trip
+test. No 6th test: Phase 4's extra test was `APIKey`-specific
 (an ambiguous-wire-type regression); Account Binding has no comparably
 ambiguous scalar field.
 
