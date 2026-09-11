@@ -14,16 +14,21 @@ import (
 // customerNumber M, amount M on request" — CustomerNumber and Amount
 // are additions beyond that base pattern, and Amount is Mandatory
 // here (a plain Money value, not *Money, per the established rule),
-// unlike the base pattern's Optional *Money. ServiceCode and
-// CustomerNumber are mandatory per the Guides tab.
+// unlike the base pattern's Optional *Money. AdditionalInfo is kept
+// from the base pattern (research §5.8 names only the two additions
+// above, not a subtraction, and §5.4's base request documents
+// additionalInfo — go-review round 1 caught this field's initial,
+// undocumented omission). ServiceCode and CustomerNumber are mandatory
+// per the Guides tab.
 type TransferToOTCTransferStatusRequest struct {
-	OriginalPartnerReferenceNo string `json:"originalPartnerReferenceNo,omitempty"`
-	OriginalReferenceNo        string `json:"originalReferenceNo,omitempty"`
-	OriginalExternalID         string `json:"originalExternalId,omitempty"`
-	ServiceCode                string `json:"serviceCode"`
-	TransactionDate            string `json:"transactionDate,omitempty"`
-	CustomerNumber             string `json:"customerNumber"`
-	Amount                     Money  `json:"amount"`
+	OriginalPartnerReferenceNo string          `json:"originalPartnerReferenceNo,omitempty"`
+	OriginalReferenceNo        string          `json:"originalReferenceNo,omitempty"`
+	OriginalExternalID         string          `json:"originalExternalId,omitempty"`
+	ServiceCode                string          `json:"serviceCode"`
+	TransactionDate            string          `json:"transactionDate,omitempty"`
+	CustomerNumber             string          `json:"customerNumber"`
+	Amount                     Money           `json:"amount"`
+	AdditionalInfo             json.RawMessage `json:"additionalInfo,omitempty"`
 }
 
 // TransferToOTCTransferStatusResponse is the response body for API

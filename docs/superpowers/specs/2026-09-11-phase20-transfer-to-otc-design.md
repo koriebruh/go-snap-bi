@@ -58,7 +58,11 @@ string` O + `OriginalReferenceNo string` O + `OriginalExternalID
 string` O + `ServiceCode string` M (no omitempty, from the base
 pattern) + `TransactionDate string` O + `CustomerNumber string` M (no
 omitempty, added) + `Amount Money` M (no omitempty, plain struct,
-added/promoted).
+added/promoted) + `AdditionalInfo json.RawMessage` O (kept from the
+base pattern — go-review round 1 caught an initial, undocumented
+omission of this field: research §5.8's "adds X, Y" wording describes
+additions, not a subtraction, and the base pattern's own request
+documents `additionalInfo` per §5.4).
 
 `TransferToOTCTransferStatusResponse`: field-identical to
 `TransactionStatusInquiryBankResponse` under its own name, per the

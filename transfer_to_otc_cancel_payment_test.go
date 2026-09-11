@@ -142,26 +142,29 @@ func TestTransferToOTCCancelPayment_MandatoryFieldsAlwaysSerialized(t *testing.T
 	}
 }
 
-// TestTransferToOTCCancelPayment_OriginalReferenceNoAlwaysInResponse
+// TestTransferToOTCCancelPaymentResponse_OriginalReferenceNoHasNoOmitempty
 // pins that OriginalReferenceNo — Mandatory in the response, unlike
 // Conditional in the request, per research §5.8's explicit note —
-// always serializes on decode, even as "".
-func TestTransferToOTCCancelPayment_OriginalReferenceNoAlwaysInResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"responseCode":"2004600","responseMessage":"ok"}`))
-	}))
-	defer server.Close()
-
-	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/emoney/otc-cancel"
-	tr := &Transport{}
-	resp, err := TransferToOTCCancelPayment(context.Background(), tr, hb, TransferToOTCCancelPaymentRequest{})
+// carries no omitempty tag. Decoding an absent JSON key into a Go
+// string always yields "" regardless of the struct tag, so the only
+// way to actually observe whether omitempty is present is on the
+// marshal side: a zero-value marshal always emits the key here, which
+// would not be true if omitempty were (re)added by a future edit.
+func TestTransferToOTCCancelPaymentResponse_OriginalReferenceNoHasNoOmitempty(t *testing.T) {
+	b, err := json.Marshal(TransferToOTCCancelPaymentResponse{})
 	if err != nil {
-		t.Fatalf("TransferToOTCCancelPayment() error = %v", err)
+		t.Fatalf("json.Marshal(zero value) error = %v", err)
 	}
-	if resp.OriginalReferenceNo != "" {
-		t.Errorf("OriginalReferenceNo = %q, want empty string when the server omits it", resp.OriginalReferenceNo)
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode marshaled zero-value response: %v", err)
+	}
+	v, ok := got["originalReferenceNo"]
+	if !ok {
+		t.Fatal(`marshaled zero-value response missing "originalReferenceNo" key; OriginalReferenceNo lacks omitempty and must always be present`)
+	}
+	if v != "" {
+		t.Errorf(`marshaled zero-value response["originalReferenceNo"] = %v, want ""`, v)
 	}
 }
 
