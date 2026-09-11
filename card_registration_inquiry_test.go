@@ -78,18 +78,48 @@ func TestCardRegistrationInquiry_URLConstruction(t *testing.T) {
 	hb := testHeaderBuilder(server.URL)
 	hb.EndpointURL = server.URL + "/v1.0/registration-card-inquiry"
 	tr := &Transport{}
-	if _, err := CardRegistrationInquiry(context.Background(), tr, hb, "abc/def"); err != nil {
+	if _, err := CardRegistrationInquiry(context.Background(), tr, hb, "cust_ID-1"); err != nil {
 		t.Fatalf("CardRegistrationInquiry() error = %v", err)
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
-	// r.URL.Path is Go's decoded form (net/http always decodes %2F back to
-	// "/" there, even when the wire bytes carried the escaped form); the
-	// literal wire bytes are only visible via EscapedPath()/RawPath.
-	want := "/v1.0/registration-card-inquiry/custIdMerchant/abc%2Fdef"
+	want := "/v1.0/registration-card-inquiry/custIdMerchant/cust_ID-1"
 	if gotEscapedPath != want {
-		t.Errorf("request wire path = %q, want %q (custIDMerchant containing '/' must be percent-encoded on the wire, not split into extra path segments)", gotEscapedPath, want)
+		t.Errorf("request wire path = %q, want %q", gotEscapedPath, want)
+	}
+}
+
+// TestCardRegistrationInquiry_RejectsQueryOrFragmentEndpointURL is the
+// regression test for a santa-loop finding: string concatenation onto an
+// EndpointURL carrying a fragment silently dropped custIDMerchant from
+// the transmitted request (net/http never sends a URL fragment at all),
+// and one carrying a query string moved the segment into RawQuery
+// instead of Path — neither produced an error, both produced a request
+// to the wrong resource. Parsing hb.EndpointURL and rejecting either
+// case outright closes both silently-wrong outcomes.
+func TestCardRegistrationInquiry_RejectsQueryOrFragmentEndpointURL(t *testing.T) {
+	for _, suffix := range []string{"?trace=1", "#frag"} {
+		t.Run(suffix, func(t *testing.T) {
+			called := false
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"responseCode":"2000300","responseMessage":"ok"}`))
+			}))
+			defer server.Close()
+
+			hb := testHeaderBuilder(server.URL)
+			hb.EndpointURL = server.URL + "/v1.0/registration-card-inquiry" + suffix
+			tr := &Transport{}
+			_, err := CardRegistrationInquiry(context.Background(), tr, hb, "cust-1")
+			if err == nil {
+				t.Fatalf("CardRegistrationInquiry() error = nil, want non-nil for EndpointURL ending in %q", suffix)
+			}
+			if called {
+				t.Error("CardRegistrationInquiry() reached the server despite an invalid EndpointURL; want the request never sent")
+			}
+		})
 	}
 }
 
@@ -125,18 +155,37 @@ func TestCardRegistrationInquiry_UsesGETWithNoBodyRegardlessOfCallerHeaderBuilde
 	}
 }
 
-// TestCardRegistrationInquiry_RejectsPathTraversalValues is the
-// regression test for a go-review finding: url.PathEscape escapes "/"
-// but not "." or "..", so a bare "." or ".." would otherwise reach the
-// wire as a real path-traversal segment (one level up), not merely an
-// opaque identifier the server rejects. All three values must be
-// rejected before any request is sent.
-func TestCardRegistrationInquiry_RejectsPathTraversalValues(t *testing.T) {
-	for _, custIDMerchant := range []string{"", ".", ".."} {
+// TestCardRegistrationInquiry_RejectsInvalidCustIDMerchant is the
+// regression test for two review rounds: a first pass (go-review) caught
+// that url.PathEscape doesn't escape "." or ".."; a second pass
+// (santa-loop round 1) caught that a three-value denylist for "" / "." /
+// ".." still lets a multi-segment value like "x/../../other" through
+// (it reaches the wire as one escaped segment, "x%2F..%2F..%2Fother",
+// which a decode-then-normalize intermediary could unfold back into real
+// path boundaries) and doesn't cover invalid UTF-8 or Unicode dot
+// lookalikes either. custIDMerchantPattern's allowlist closes all of
+// these in one guard instead of enumerating each variant.
+func TestCardRegistrationInquiry_RejectsInvalidCustIDMerchant(t *testing.T) {
+	values := []string{
+		"",
+		".",
+		"..",
+		"abc/def",
+		"x/../../other",
+		"..\\",
+		"%2e%2e",
+		"\xc0\xae\xc0\xae", // overlong UTF-8 encoding of ".."
+		"cust․․",           // U+2024 ONE DOT LEADER, an NFKC "." lookalike
+		"cust?trace=1",
+	}
+	for _, custIDMerchant := range values {
 		t.Run(custIDMerchant, func(t *testing.T) {
+			var mu sync.Mutex
 			called := false
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
 				called = true
+				mu.Unlock()
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"responseCode":"2000300","responseMessage":"ok"}`))
 			}))
@@ -149,6 +198,8 @@ func TestCardRegistrationInquiry_RejectsPathTraversalValues(t *testing.T) {
 			if err == nil {
 				t.Fatalf("CardRegistrationInquiry() error = nil, want non-nil for custIDMerchant = %q", custIDMerchant)
 			}
+			mu.Lock()
+			defer mu.Unlock()
 			if called {
 				t.Error("CardRegistrationInquiry() reached the server despite an invalid custIDMerchant; want the request never sent")
 			}

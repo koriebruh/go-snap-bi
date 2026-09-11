@@ -13,7 +13,12 @@ field). GET. Confirmed via worked `responseCode` `2000300`.
 ### Request
 
 No JSON body (GET). One input: `custIdMerchant` (String, Mandatory,
-length 18), appended as the final path segment.
+length 18), appended as the final path segment. This package validates
+it against `^[A-Za-z0-9_-]{1,64}$` (see Design) rather than passing any
+string through — narrower than the raw "String" the Guides tab allows,
+but every worked example in the standard is alphanumeric, and no
+endpoint in this package accepts a business identifier containing `.`,
+`/`, or non-ASCII characters.
 
 ### Response body
 
@@ -54,24 +59,42 @@ with nowhere to put a JSON tag. The function:
    protocol requirement of this specific endpoint, not something a caller
    should choose per call (every other implemented endpoint is POST, so
    there's no existing caller expectation to preserve either way).
-2. Rejects `custIDMerchant` values `""`, `"."`, and `".."` outright, then
-   appends the value to `hb.EndpointURL` (with any trailing `/` trimmed
-   first) via `url.PathEscape`, not raw string concatenation. This is the
+2. Validates `custIDMerchant` against `custIDMerchantPattern`
+   (`^[A-Za-z0-9_-]{1,64}$`) — an allowlist, not a denylist. This is the
    package's first caller input that reaches a URL path rather than a
-   JSON body, and the two hazards are different: `url.PathEscape` DOES
-   escape `/` (santa-loop review confirmed: a `custIDMerchant` containing
-   `/` cannot add an extra path segment), but it does NOT escape `.` —
-   `.`/`..` are ordinary path-segment characters that only become
-   dangerous through their special filesystem-style meaning, which
-   escaping can't distinguish from a literal dot. That's a go-review
-   finding on this phase: the package's own `BalanceInquiryRequest`/
+   JSON body, which is a different trust boundary than every other
+   endpoint's fields: the package's `BalanceInquiryRequest`/
    `AccountUnbindingRequest` precedent for skipping client-side
    validation applies to JSON *body* fields, where a bad value can only
-   be rejected by the server — it doesn't transfer to a URL *path*
-   segment, where a bad value can silently redirect the request to a
-   different resource (a `..` walks up one path level) before the
-   server ever sees it.
-3. Calls `t.Do` and decodes exactly like every other binding
+   be rejected by the server; it doesn't transfer to a URL *path*
+   segment, where a bad value can retarget the request to a different
+   resource before the server ever validates anything.
+
+   This went through two review rounds before landing on an allowlist.
+   `url.PathEscape` does escape `/` but not `.`/`..` (both are ordinary
+   path-segment characters; only their special two-dot-meaning is
+   dangerous, and escaping can't tell literal dots from traversal dots),
+   so a first fix denylisted `""`, `"."`, `".."`. Santa-loop review then
+   found the denylist incomplete: a multi-segment value like
+   `"x/../../other"` still passes it and reaches the wire as one escaped
+   segment (`"x%2F..%2F..%2Fother"`), which a decode-then-normalize
+   intermediary could unfold back into real path boundaries — and
+   invalid UTF-8 or Unicode dot lookalikes (e.g. U+2024) aren't covered
+   by a three-value list at all. An allowlist restricted to the
+   character set every worked identifier in the standard actually uses
+   closes the whole class in one guard instead of enumerating variants.
+3. Parses `hb.EndpointURL` with `url.Parse` — rejecting one with a
+   non-empty query string or fragment — rather than concatenating
+   strings onto it. This is also a santa-loop finding: string
+   concatenation onto an `EndpointURL` ending in a fragment (`#...`)
+   silently dropped `custIDMerchant` from the transmitted request
+   (`net/http` never transmits a URL fragment), and one ending in a
+   query string moved the segment into the query instead of the path —
+   neither produced an error. Trims any trailing `/` from the parsed
+   path (not the whole string) before appending
+   `"/custIdMerchant/" + custIDMerchant`, so a caller's `EndpointURL`
+   ending in any number of slashes still produces exactly one.
+4. Calls `t.Do` and decodes exactly like every other binding
    (`checkResponseStatus`, decode, reject empty `responseCode`).
 
 This is a read-only GET with no side effects, so it needs no
@@ -79,21 +102,23 @@ idempotency note.
 
 ## Testing
 
-9 tests: full-struct response DeepEqual (nested `accountList`), a
+10 tests: full-struct response DeepEqual (nested `accountList`), a
 URL-construction test (asserting the exact request wire path via
-`r.URL.EscapedPath()`, including escaping a `custIDMerchant` value
-containing a `/` — `r.URL.Path` decodes `%2F` back to `/`, so it can't
-tell an escaped slash from a real path boundary), a
-path-traversal-rejection test (`""`, `"."`, `".."` all rejected before
-any request is sent), a trailing-slash test (a caller's `EndpointURL`
-ending in `/` still produces one, not two, slashes before
-`custIdMerchant`), a signature-correctness test (recomputes
-`BuildStringToSignTransaction` from the server-observed timestamp and
-compares against the received `X-SIGNATURE`, closing the one part of
-this GET-shaped request no other test exercises), non-2xx-responseCode,
-non-2xx-status-with-2xx-body, 2xx-status-with-no-responseCode, and a
-test asserting the request method is GET with no body regardless of
-what the caller left on `hb.Body`/`hb.Method` before the call (proving
-the override actually overrides caller-set values rather than only
-filling in unset ones — verified via `r.ContentLength`, not a
-best-effort one-byte `Read`).
+`r.URL.EscapedPath()` for a valid `custIDMerchant`), a
+rejected-`custIDMerchant` table test (`""`, `"."`, `".."`, a `/`-bearing
+value, a multi-segment traversal attempt, a backslash variant, a
+percent-encoded `..`, invalid UTF-8, a Unicode dot lookalike, and a
+`?`-bearing value — all rejected before any request is sent, closing
+the allowlist boundary both review rounds found gaps in), a
+query-or-fragment-`EndpointURL`-rejection test, a trailing-slash test
+(a caller's `EndpointURL` ending in `/` still produces one, not two,
+slashes before `custIdMerchant`), a signature-correctness test
+(recomputes `BuildStringToSignTransaction` from the server-observed
+timestamp and compares against the received `X-SIGNATURE`, closing the
+one part of this GET-shaped request no other test exercises),
+non-2xx-responseCode, non-2xx-status-with-2xx-body,
+2xx-status-with-no-responseCode, and a test asserting the request
+method is GET with no body regardless of what the caller left on
+`hb.Body`/`hb.Method` before the call (proving the override actually
+overrides caller-set values rather than only filling in unset ones —
+verified via `r.ContentLength`, not a best-effort one-byte `Read`).
