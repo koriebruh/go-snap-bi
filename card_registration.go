@@ -1,0 +1,88 @@
+package snap
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+// CardRegistrationRequest is the request body for API Card Registration
+// (Service Code 01, path .../{version}/registration-card-bind).
+// BankCardNo and CustIDMerchant are the two mandatory fields per the
+// Guides tab.
+//
+// CardData and Limit are typed json.RawMessage rather than string or a
+// numeric type: the Guides tab labels CardData "Encrypted Object" and
+// Limit "decimal", both of which permit a non-string JSON representation
+// (a bare object, a bare number), even though the portal's one worked
+// example renders each as a quoted string.
+type CardRegistrationRequest struct {
+	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
+	AccountName        string          `json:"accountName,omitempty"`
+	CardData           json.RawMessage `json:"cardData,omitempty"`
+	BankAccountNo      string          `json:"bankAccountNo,omitempty"`
+	BankCardNo         string          `json:"bankCardNo"`
+	BankCardType       string          `json:"bankCardType,omitempty"`
+	DateOfBirth        string          `json:"dateOfBirth,omitempty"`
+	Email              string          `json:"email,omitempty"`
+	ExpiredDatetime    string          `json:"expiredDatetime,omitempty"`
+	ExpiryDate         string          `json:"expiryDate,omitempty"`
+	IdentificationNo   string          `json:"identificationNo,omitempty"`
+	IdentificationType string          `json:"identificationType,omitempty"`
+	CustIDMerchant     string          `json:"custIdMerchant"`
+	IsBindAndPay       string          `json:"isBindAndPay,omitempty"`
+	MerchantID         string          `json:"merchantId,omitempty"`
+	TerminalID         string          `json:"terminalId,omitempty"`
+	JourneyID          string          `json:"journeyId,omitempty"`
+	SubMerchantID      string          `json:"subMerchantId,omitempty"`
+	ExternalStoreID    string          `json:"externalStoreId,omitempty"`
+	Limit              json.RawMessage `json:"limit,omitempty"`
+	MerchantLogoURL    string          `json:"merchantLogoUrl,omitempty"`
+	PhoneNo            string          `json:"phoneNo,omitempty"`
+	SendOtpFlag        string          `json:"sendOtpFlag,omitempty"`
+	Type               string          `json:"type,omitempty"`
+	AdditionalInfo     json.RawMessage `json:"additionalInfo,omitempty"`
+}
+
+// CardRegistrationResponse is the response body for API Card Registration.
+type CardRegistrationResponse struct {
+	ResponseCode       string          `json:"responseCode"`
+	ResponseMessage    string          `json:"responseMessage"`
+	ReferenceNo        string          `json:"referenceNo,omitempty"`
+	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
+	BankCardToken      string          `json:"bankCardToken"`
+	ChargeToken        string          `json:"chargeToken,omitempty"`
+	RandomString       string          `json:"randomString,omitempty"`
+	TokenExpiryTime    string          `json:"tokenExpiryTime,omitempty"`
+	AdditionalInfo     json.RawMessage `json:"additionalInfo,omitempty"`
+}
+
+// CardRegistration calls the SNAP Card Registration endpoint (Service Code
+// 01). hb must already carry every field HeaderBuilder needs except Body,
+// which CardRegistration sets itself so the exact marshaled bytes are used
+// for both signing and the wire body.
+func CardRegistration(ctx context.Context, t *Transport, hb HeaderBuilder, req CardRegistrationRequest) (CardRegistrationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return CardRegistrationResponse{}, fmt.Errorf("snap: card registration: encode request: %w", err)
+	}
+	hb.Body = body
+
+	env, err := t.Do(ctx, hb)
+	if err != nil {
+		return CardRegistrationResponse{}, err
+	}
+	if err := checkResponseStatus(env.ResponseCode, env.StatusCode); err != nil {
+		return CardRegistrationResponse{}, fmt.Errorf("snap: card registration: %w", err)
+	}
+
+	var resp CardRegistrationResponse
+	if err := json.Unmarshal(env.Raw, &resp); err != nil {
+		return CardRegistrationResponse{}, fmt.Errorf("snap: card registration: decode response: %w", err)
+	}
+	if resp.ResponseCode == "" {
+		return CardRegistrationResponse{}, errors.New("snap: card registration: response has no responseCode")
+	}
+	return resp, nil
+}

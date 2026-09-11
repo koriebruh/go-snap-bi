@@ -13,6 +13,7 @@
 //   - AccountCreation (docs/superpowers/specs/2026-09-11-phase4-account-creation-design.md)
 //   - AccountBinding (docs/superpowers/specs/2026-09-11-phase5-account-binding-design.md)
 //   - AccountBindingInquiry, AccountUnbinding (docs/superpowers/specs/2026-09-11-phase6-account-binding-inquiry-unbinding-design.md)
+//   - CardRegistration, CardRegistrationSetLimit (docs/superpowers/specs/2026-09-11-phase7-card-registration-set-limit-design.md)
 //
 // Most services (transfer, virtual account, QRIS, direct debit, etc.) are
 // not yet implemented.
