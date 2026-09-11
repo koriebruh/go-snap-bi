@@ -32,3 +32,44 @@ type InterbankBulkTransferNotificationItem struct {
 	ResponseCode       string `json:"responseCode"`
 	ResponseMessage    string `json:"responseMessage"`
 }
+
+// LocalizedText is the shared {english, indonesia} bilingual text shape
+// used across the Virtual Account sub-group (e.g. inquiryReason,
+// paymentFlagReason, billDescription, per-bill reason, freeTexts[]
+// entries). Both fields are String, unmarked for M/O in the source, so
+// both carry omitempty.
+type LocalizedText struct {
+	English   string `json:"english,omitempty"`
+	Indonesia string `json:"indonesia,omitempty"`
+}
+
+// BillDetail is one entry in the Virtual Account sub-group's
+// "billDetails[]" array (max 24 entries). All fields are unmarked for
+// M/O in the source, so all carry omitempty; BillDescription, BillAmount,
+// and Reason are pointers since omitempty has no effect on a
+// non-pointer struct value. BillReferenceNo is documented Numeric in
+// the Guides tab (research §5.3); per the package's ambiguous-type rule,
+// a documented Numeric field is typed json.RawMessage rather than
+// string, since a plain string field fails the entire decode if any
+// issuer sends it as a bare JSON number, matching the existing
+// AccountTransactionLimit/APIKey precedent. BillDetail is also used in
+// request bodies (CreateVARequest.BillDetails, UpdateVARequest.BillDetails),
+// so a caller setting BillReferenceNo must supply a complete JSON value
+// (e.g. json.RawMessage(`"BILLREF1"`) or json.RawMessage(`123`)), not a
+// bare Go string — an incomplete value fails json.Marshal for the whole
+// request.
+type BillDetail struct {
+	BillCode        string          `json:"billCode,omitempty"`
+	BillNo          string          `json:"billNo,omitempty"`
+	BillName        string          `json:"billName,omitempty"`
+	BillShortName   string          `json:"billShortName,omitempty"`
+	BillDescription *LocalizedText  `json:"billDescription,omitempty"`
+	BillSubCompany  string          `json:"billSubCompany,omitempty"`
+	BillAmount      *Money          `json:"billAmount,omitempty"`
+	AdditionalInfo  json.RawMessage `json:"additionalInfo,omitempty"`
+	BillAmountLabel string          `json:"billAmountLabel,omitempty"`
+	BillAmountValue string          `json:"billAmountValue,omitempty"`
+	BillReferenceNo json.RawMessage `json:"billReferenceNo,omitempty"`
+	Status          string          `json:"status,omitempty"`
+	Reason          *LocalizedText  `json:"reason,omitempty"`
+}

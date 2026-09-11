@@ -21,6 +21,8 @@
 //   - RequestForPayment, InterbankBulkTransfer, RTGSTransfer, SKNBITransfer,
 //     plus inbound-only notification types for the latter three
 //     (docs/superpowers/specs/2026-09-11-phase12-trigger-transfer-rfp-bulk-rtgs-sknbi-design.md)
+//   - CreateVA, UpdateVA, UpdateStatusVA, InquiryVA, DeleteVA
+//     (docs/superpowers/specs/2026-09-11-phase13-virtual-account-management-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See
