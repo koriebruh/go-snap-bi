@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync"
 	"testing"
 )
@@ -79,18 +80,25 @@ func TestBalanceInquiry_ParsesWorkedExampleResponse(t *testing.T) {
 	if len(resp.AccountInfos) != 1 {
 		t.Fatalf("len(AccountInfos) = %d, want 1", len(resp.AccountInfos))
 	}
-	info := resp.AccountInfos[0]
-	if info.BalanceType != "Cash" {
-		t.Errorf("AccountInfos[0].BalanceType = %q, want %q", info.BalanceType, "Cash")
+	want := AccountInfo{
+		BalanceType:              "Cash",
+		Amount:                   Money{Value: "200000.00", Currency: "IDR"},
+		FloatAmount:              Money{Value: "50000.00", Currency: "IDR"},
+		HoldAmount:               Money{Value: "20000.00", Currency: "IDR"},
+		AvailableBalance:         Money{Value: "130000.00", Currency: "IDR"},
+		LedgerBalance:            Money{Value: "30000.00", Currency: "IDR"},
+		CurrentMultilateralLimit: Money{Value: "10000.00", Currency: "IDR"},
+		RegistrationStatusCode:   "0001",
+		Status:                   "0001",
 	}
-	if info.Amount != (Money{Value: "200000.00", Currency: "IDR"}) {
-		t.Errorf("AccountInfos[0].Amount = %+v, want {200000.00 IDR}", info.Amount)
-	}
-	if info.AvailableBalance != (Money{Value: "130000.00", Currency: "IDR"}) {
-		t.Errorf("AccountInfos[0].AvailableBalance = %+v, want {130000.00 IDR}", info.AvailableBalance)
-	}
-	if info.Status != "0001" {
-		t.Errorf("AccountInfos[0].Status = %q, want %q", info.Status, "0001")
+	// Compare every field, not just a hand-picked few — a typo'd json tag on
+	// any field (e.g. ledgerBalance) would otherwise pass silently.
+	// reflect.DeepEqual (not !=) because AdditionalInfo is a json.RawMessage
+	// ([]byte), which isn't comparable via ==.
+	got := resp.AccountInfos[0]
+	got.AdditionalInfo = nil // not present in the fixture; exclude from comparison
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("AccountInfos[0] = %+v, want %+v", got, want)
 	}
 }
 
@@ -122,15 +130,24 @@ func TestBalanceInquiry_RequestBodyRoundTrips(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	var got BalanceInquiryRequest
+	// Decode into map[string]any and check the actual wire key names,
+	// rather than unmarshaling into BalanceInquiryRequest again — that
+	// would make a wrong json tag on the request side (e.g. accountNo ->
+	// account_no) marshal and unmarshal consistently with itself and still
+	// pass.
+	var got map[string]any
 	if err := json.Unmarshal(gotBody, &got); err != nil {
 		t.Fatalf("decode request body the server received: %v", err)
 	}
-	if got.PartnerReferenceNo != req.PartnerReferenceNo || got.AccountNo != req.AccountNo {
-		t.Errorf("server received %+v, want partnerReferenceNo/accountNo matching %+v", got, req)
+	if got["partnerReferenceNo"] != "ref-1" {
+		t.Errorf(`wire body["partnerReferenceNo"] = %v, want "ref-1"`, got["partnerReferenceNo"])
 	}
-	if len(got.BalanceTypes) != 2 || got.BalanceTypes[0] != "Cash" || got.BalanceTypes[1] != "Coins" {
-		t.Errorf("server received BalanceTypes = %v, want [Cash Coins]", got.BalanceTypes)
+	if got["accountNo"] != "123456" {
+		t.Errorf(`wire body["accountNo"] = %v, want "123456"`, got["accountNo"])
+	}
+	balanceTypes, ok := got["balanceTypes"].([]any)
+	if !ok || len(balanceTypes) != 2 || balanceTypes[0] != "Cash" || balanceTypes[1] != "Coins" {
+		t.Errorf(`wire body["balanceTypes"] = %v, want ["Cash" "Coins"]`, got["balanceTypes"])
 	}
 }
 
@@ -149,5 +166,26 @@ func TestBalanceInquiry_NonTwoXXResponseCodeIsError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrBadRequest) {
 		t.Errorf("BalanceInquiry() error = %v, want errors.Is(err, ErrBadRequest)", err)
+	}
+}
+
+// TestBalanceInquiry_NonTwoXXWithNoResponseCodeIsError is the regression
+// test for a go-review finding: a non-2xx HTTP response whose body doesn't
+// carry a responseCode field at all (e.g. a proxy/WAF error page) was
+// previously returned as a "successful" zero-value BalanceInquiryResponse
+// with a nil error, since Transport.Do intentionally doesn't interpret HTTP
+// status, and envelopeError("") returns nil by design.
+func TestBalanceInquiry_NonTwoXXWithNoResponseCodeIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"message":"boom"}`)) // no responseCode field at all
+	}))
+	defer server.Close()
+
+	tr := &Transport{}
+	resp, err := BalanceInquiry(context.Background(), tr, testHeaderBuilder(server.URL), BalanceInquiryRequest{AccountNo: "123"})
+	if err == nil {
+		t.Fatalf("BalanceInquiry() error = nil, want non-nil; got zero-value response = %+v", resp)
 	}
 }

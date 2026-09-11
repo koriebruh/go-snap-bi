@@ -3,6 +3,7 @@ package snap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -74,6 +75,13 @@ func BalanceInquiry(ctx context.Context, t *Transport, hb HeaderBuilder, req Bal
 	var resp BalanceInquiryResponse
 	if err := json.Unmarshal(env.Raw, &resp); err != nil {
 		return BalanceInquiryResponse{}, fmt.Errorf("snap: balance inquiry: decode response: %w", err)
+	}
+	if resp.ResponseCode == "" {
+		// responseCode is mandatory in the standard's response shape. A
+		// non-2xx response with a body that doesn't carry it (e.g. a
+		// proxy/WAF error page) must not fall through to being returned as
+		// a "successful" zero-value response.
+		return BalanceInquiryResponse{}, errors.New("snap: balance inquiry: response has no responseCode")
 	}
 	return resp, nil
 }
