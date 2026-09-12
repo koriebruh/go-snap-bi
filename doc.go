@@ -59,9 +59,9 @@
 // docs/superpowers/specs/2026-09-10-go-snap-bi-core-design.md) remains
 // entirely unresearched and needs its own research pass before any
 // design doc can be written for it, as does the remainder of SNAP's
-// non-Transfer-Kredit service groups (Registrasi, Informasi Saldo,
-// Riwayat Transaksi) beyond the handful of endpoints already
-// implemented above. See
+// ~14 service groups (including Registrasi, Informasi Saldo, Riwayat
+// Transaksi) beyond the handful of endpoints already implemented
+// above. See
 // docs/research/2026-09-11-transfer-kredit-portal-research.md for the
 // full Transfer Kredit endpoint inventory.
 package snap
