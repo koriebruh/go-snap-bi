@@ -41,6 +41,8 @@
 //   - TransferToOTCCreatePayment, TransferToOTCTransferStatus,
 //     TransferToOTCCancelPayment
 //     (docs/superpowers/specs/2026-09-11-phase20-transfer-to-otc-design.md)
+//   - GenerateQRMPM, DecodeQRMPM
+//     (docs/superpowers/specs/2026-09-11-phase21-mpm-qr-generate-decode-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See
