@@ -53,15 +53,17 @@
 //     (docs/superpowers/specs/2026-09-11-phase24-mpm-qr-cancel-refund-design.md)
 //   - TransactionStatusInquiryNonBank (completes Transfer Kredit)
 //     (docs/superpowers/specs/2026-09-11-phase25-transaction-status-inquiry-nonbank-design.md)
+//   - DirectDebitPayment, DirectDebitPaymentStatus
+//     (docs/superpowers/specs/2026-09-12-phase26-direct-debit-payment-status-design.md)
 //
 // All of Transfer Kredit is now implemented. Transfer Debit (4
-// sub-groups including Direct Debit and QR/CPM, per
-// docs/superpowers/specs/2026-09-10-go-snap-bi-core-design.md) remains
-// entirely unresearched and needs its own research pass before any
-// design doc can be written for it, as does the remainder of SNAP's
+// sub-groups: Direct Debit, CPM, Auth Payment, Direct Debit BI-FAST,
+// 21 endpoints total, per
+// docs/research/2026-09-12-transfer-debit-portal-research.md) is in
+// progress, starting with Direct Debit above. The remainder of SNAP's
 // ~14 service groups (including Registrasi, Informasi Saldo, Riwayat
-// Transaksi) beyond the handful of endpoints already implemented
-// above. See
+// Transaksi) beyond Transfer Kredit and Transfer Debit remains
+// unresearched. See
 // docs/research/2026-09-11-transfer-kredit-portal-research.md for the
 // full Transfer Kredit endpoint inventory.
 package snap
