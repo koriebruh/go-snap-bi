@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -38,7 +39,8 @@ func TestDirectDebitPayment_ParsesResponse(t *testing.T) {
    "partnerReferenceNo":"PARTNER001",
    "approvalCode":"APPROVAL001",
    "appRedirectUrl":"https://app.example.com/redirect",
-   "webRedirectUrl":"https://web.example.com/redirect"
+   "webRedirectUrl":"https://web.example.com/redirect",
+   "additionalInfo":{"note":"resp-note"}
 }`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -64,6 +66,7 @@ func TestDirectDebitPayment_ParsesResponse(t *testing.T) {
 		ApprovalCode:       "APPROVAL001",
 		AppRedirectURL:     "https://app.example.com/redirect",
 		WebRedirectURL:     "https://web.example.com/redirect",
+		AdditionalInfo:     json.RawMessage(`{"note":"resp-note"}`),
 	}
 	if !reflect.DeepEqual(resp, want) {
 		t.Errorf("DirectDebitPayment() = %+v, want %+v", resp, want)
@@ -111,14 +114,16 @@ func TestDirectDebitPayment_RequestBodyRoundTrips(t *testing.T) {
 		DisabledPayMethods: "CARD",
 		PayOptionDetails: []DirectDebitPayOptionDetail{
 			{
-				PayMethod:     "CARD",
-				PayOption:     "CREDIT",
-				TransAmount:   &Money{Value: "50000.00", Currency: "IDR"},
-				FeeAmount:     &Money{Value: "1000.00", Currency: "IDR"},
-				CardToken:     "CARDTOKEN02",
-				MerchantToken: "MERCHTOKEN01",
+				PayMethod:      "CARD",
+				PayOption:      "CREDIT",
+				TransAmount:    &Money{Value: "50000.00", Currency: "IDR"},
+				FeeAmount:      &Money{Value: "1000.00", Currency: "IDR"},
+				CardToken:      "CARDTOKEN02",
+				MerchantToken:  "MERCHTOKEN01",
+				AdditionalInfo: json.RawMessage(`{"item-note":"item-value"}`),
 			},
 		},
+		AdditionalInfo: json.RawMessage(`{"note":"req-value"}`),
 	}
 	if _, err := DirectDebitPayment(context.Background(), tr, hb, req); err != nil {
 		t.Fatalf("DirectDebitPayment() error = %v", err)
@@ -152,17 +157,43 @@ func TestDirectDebitPayment_RequestBodyRoundTrips(t *testing.T) {
 		"disabledPayMethods": "CARD",
 		"payOptionDetails": []any{
 			map[string]any{
-				"payMethod":     "CARD",
-				"payOption":     "CREDIT",
-				"transAmount":   map[string]any{"value": "50000.00", "currency": "IDR"},
-				"feeAmount":     map[string]any{"value": "1000.00", "currency": "IDR"},
-				"cardToken":     "CARDTOKEN02",
-				"merchantToken": "MERCHTOKEN01",
+				"payMethod":      "CARD",
+				"payOption":      "CREDIT",
+				"transAmount":    map[string]any{"value": "50000.00", "currency": "IDR"},
+				"feeAmount":      map[string]any{"value": "1000.00", "currency": "IDR"},
+				"cardToken":      "CARDTOKEN02",
+				"merchantToken":  "MERCHTOKEN01",
+				"additionalInfo": map[string]any{"item-note": "item-value"},
 			},
 		},
+		"additionalInfo": map[string]any{"note": "req-value"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("wire body = %v, want %v", got, want)
+	}
+}
+
+func TestDirectDebitPayment_MalformedAdditionalInfoIsMarshalError(t *testing.T) {
+	var requested atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested.Store(true)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2005400","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/debit/payment-host-to-host"
+	tr := &Transport{}
+	_, err := DirectDebitPayment(context.Background(), tr, hb, DirectDebitPaymentRequest{
+		PartnerReferenceNo: "PARTNER001",
+		AdditionalInfo:     json.RawMessage(`{`),
+	})
+	if err == nil {
+		t.Fatal("DirectDebitPayment() error = nil, want non-nil for malformed AdditionalInfo JSON")
+	}
+	if requested.Load() {
+		t.Error("DirectDebitPayment() sent an HTTP request despite a request-encoding failure")
 	}
 }
 

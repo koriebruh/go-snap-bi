@@ -61,6 +61,13 @@ type DirectDebitPaymentRequest struct {
 // DirectDebitPaymentResponse is the response body for API Direct Debit
 // Payment. ReferenceNo is Conditional (success only). No response
 // field is Mandatory beyond the envelope.
+//
+// AppRedirectURL and WebRedirectURL are returned verbatim from the
+// server; this package does no scheme/host validation. Callers that
+// navigate a WebView or browser to either URL should validate the
+// scheme (https:// or the caller's own registered app scheme) first,
+// since a spoofed or compromised response could otherwise return an
+// attacker-controlled URL.
 type DirectDebitPaymentResponse struct {
 	ResponseCode       string          `json:"responseCode"`
 	ResponseMessage    string          `json:"responseMessage"`
