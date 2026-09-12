@@ -197,6 +197,27 @@ func TestDirectDebitPaymentStatus_MandatoryFieldAlwaysSerialized(t *testing.T) {
 	}
 }
 
+// TestDirectDebitRefundHistoryItem_MandatoryFieldsHaveNoOmitempty pins
+// that PartnerRefundNo and RefundStatus — Mandatory per research §5.1
+// line 136-138 — always serialize, even from a zero-value item. The
+// parse test above always populates every item field, so this is the
+// only guard against a tag silently gaining omitempty.
+func TestDirectDebitRefundHistoryItem_MandatoryFieldsHaveNoOmitempty(t *testing.T) {
+	b, err := json.Marshal(DirectDebitRefundHistoryItem{})
+	if err != nil {
+		t.Fatalf("json.Marshal(zero value) error = %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode marshaled zero-value DirectDebitRefundHistoryItem: %v", err)
+	}
+	for _, key := range []string{"partnerRefundNo", "refundStatus"} {
+		if _, ok := got[key]; !ok {
+			t.Errorf(`marshaled zero-value DirectDebitRefundHistoryItem missing %q key; want it always present`, key)
+		}
+	}
+}
+
 // TestDirectDebitPaymentStatusResponse_ZeroValueOmitsOptionalFields
 // pins that a zero-value response marshals to just the envelope plus
 // LatestTransactionStatus (the response's only non-omitempty field

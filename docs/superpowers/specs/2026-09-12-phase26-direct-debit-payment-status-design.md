@@ -115,6 +115,33 @@ status query, no non-idempotency note (matching
 `TransactionStatusInquiryBank`/`TransactionStatusInquiryNonBank`
 precedent).
 
+## Santa-loop round 1 additions
+
+Both independent reviewers converged on the same MEDIUM: none of the
+three new array-item types (`DirectDebitPaymentURLParam`,
+`DirectDebitPayOptionDetail`, `DirectDebitRefundHistoryItem`) had a
+test pinning their Mandatory members' lack of `omitempty` — the
+round-trip tests always populate every item field, so a tag silently
+gaining `omitempty` would go undetected. Fixed by adding one
+zero-value-marshal test per type, mirroring the existing
+`TestMPMMerchantInfo_FieldsHaveNoOmitempty` precedent
+(`mpm_qr_decode_test.go`).
+
+One reviewer additionally questioned why `DirectDebitPaymentStatusResponse`
+omits `merchantId`/`subMerchantId`/`externalStoreId` (present on the
+request) — verified as correct, not an omission: this matches the
+established precedent that sub-group request-only additions don't
+propagate to the response, per `QRMPMQueryPaymentResponse`
+(`mpm_qr_query_payment.go:37-57`), which excludes the same three
+fields despite the request carrying them. No code change from this
+finding.
+
+`AdditionalInfo`'s absence from both sides of Service Code 55 (unlike
+54/56/57/58, which all have it) is likewise deliberate, not
+overlooked: §4's base-field list for 55 omits it, and line 132's "Resp
+adds" list doesn't name it either. Recorded here so a later phase
+doesn't "fix" it without checking research first.
+
 ## FieldCounts guards
 
 Both types get `TestDirectDebitPaymentTypes_FieldCounts` and

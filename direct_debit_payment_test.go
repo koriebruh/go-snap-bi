@@ -236,6 +236,46 @@ func TestDirectDebitPayment_MandatoryFieldAlwaysSerialized(t *testing.T) {
 	}
 }
 
+// TestDirectDebitPaymentURLParam_FieldsHaveNoOmitempty pins that URL,
+// Type, and IsDeeplink — all Mandatory per research §5.1 line 114 —
+// always serialize, even from a zero-value item. The round-trip test
+// above always populates every item field, so this is the only guard
+// against a tag silently gaining omitempty.
+func TestDirectDebitPaymentURLParam_FieldsHaveNoOmitempty(t *testing.T) {
+	b, err := json.Marshal(DirectDebitPaymentURLParam{})
+	if err != nil {
+		t.Fatalf("json.Marshal(zero value) error = %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode marshaled zero-value DirectDebitPaymentURLParam: %v", err)
+	}
+	for _, key := range []string{"url", "type", "isDeeplink"} {
+		if _, ok := got[key]; !ok {
+			t.Errorf(`marshaled zero-value DirectDebitPaymentURLParam missing %q key; want it always present`, key)
+		}
+	}
+}
+
+// TestDirectDebitPayOptionDetail_MandatoryFieldsHaveNoOmitempty pins
+// that PayMethod and PayOption — Mandatory per research §5.1 line 118
+// — always serialize, even from a zero-value item.
+func TestDirectDebitPayOptionDetail_MandatoryFieldsHaveNoOmitempty(t *testing.T) {
+	b, err := json.Marshal(DirectDebitPayOptionDetail{})
+	if err != nil {
+		t.Fatalf("json.Marshal(zero value) error = %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode marshaled zero-value DirectDebitPayOptionDetail: %v", err)
+	}
+	for _, key := range []string{"payMethod", "payOption"} {
+		if _, ok := got[key]; !ok {
+			t.Errorf(`marshaled zero-value DirectDebitPayOptionDetail missing %q key; want it always present`, key)
+		}
+	}
+}
+
 // TestDirectDebitPaymentResponse_ZeroValueOmitsOptionalFields pins that
 // a zero-value response marshals to just the two envelope fields.
 func TestDirectDebitPaymentResponse_ZeroValueOmitsOptionalFields(t *testing.T) {
