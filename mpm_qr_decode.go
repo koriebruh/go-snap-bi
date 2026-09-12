@@ -12,8 +12,10 @@ import (
 //
 // MerchantPAN is documented Numeric(19) but quoted as a string on the
 // wire (research §5.9 line 194) — the same ambiguous-type shape as
-// customerNo (Phase 14/15) and CustomerMonthlyInLimit (Phase 17), so it
-// is json.RawMessage rather than string or a numeric Go type.
+// CustomerMonthlyInLimit (Phase 17: documented Numeric, quoted on wire).
+// customerNo (Phase 14/15) is the inverse direction of the same rule
+// (documented String, bare number on wire). Either direction gets
+// json.RawMessage rather than string or a numeric Go type.
 type MPMMerchantInfo struct {
 	MerchantPAN  json.RawMessage `json:"merchantPAN"`
 	AcquirerName string          `json:"acquirerName"`

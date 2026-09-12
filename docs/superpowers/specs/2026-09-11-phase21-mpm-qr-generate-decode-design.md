@@ -27,12 +27,14 @@ enforced.
 ## `merchantPAN` — ambiguous-type rule applied
 
 `merchantInfos[].merchantPAN` is documented `Numeric(19)` but "quoted
-string on wire" (research line 194) — the same shape as `customerNo`
-(Phase 14/15), `channelCode`/`paymentType` (Phase 14/15), and
+string on wire" (research line 194) — the same shape as
+`channelCode`/`paymentType` (Phase 14/15) and
 `CustomerMonthlyInLimit`/`CategoryID` (Phase 17): a documented
-non-string-capable type that must round-trip a quoted value. Per the
-package's standing ambiguous-type rule, this becomes `json.RawMessage`,
-not `string` or a numeric Go type.
+non-string-capable type that must round-trip a quoted value.
+`customerNo` (Phase 14/15) is the inverse direction of the same rule
+(documented `String`, bare number on wire), not an identical shape. Per
+the package's standing ambiguous-type rule, either direction becomes
+`json.RawMessage`, not `string` or a numeric Go type.
 
 ## `qrImage` — base64, unbounded
 

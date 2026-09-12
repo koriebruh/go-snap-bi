@@ -79,8 +79,12 @@ func TestGenerateQRMPM_RequestBodyRoundTrips(t *testing.T) {
 	req := GenerateQRMPMRequest{
 		PartnerReferenceNo: "partner-ref-1",
 		Amount:             &Money{Value: "50000.00", Currency: "IDR"},
+		FeeAmount:          &Money{Value: "500.00", Currency: "IDR"},
 		MerchantID:         "MERCH01",
+		SubMerchantID:      "SUBMERCH01",
 		StoreID:            "STORE01",
+		TerminalID:         "TERM01",
+		ValidityPeriod:     "2020-12-20T10:00:00+07:00",
 	}
 	if _, err := GenerateQRMPM(context.Background(), tr, hb, req); err != nil {
 		t.Fatalf("GenerateQRMPM() error = %v", err)
@@ -92,12 +96,18 @@ func TestGenerateQRMPM_RequestBodyRoundTrips(t *testing.T) {
 	if err := json.Unmarshal(gotBody, &got); err != nil {
 		t.Fatalf("decode request body the server received: %v", err)
 	}
-	if got["merchantId"] != "MERCH01" {
-		t.Errorf(`wire body["merchantId"] = %v, want "MERCH01"`, got["merchantId"])
+	want := map[string]any{
+		"partnerReferenceNo": "partner-ref-1",
+		"amount":             map[string]any{"value": "50000.00", "currency": "IDR"},
+		"feeAmount":          map[string]any{"value": "500.00", "currency": "IDR"},
+		"merchantId":         "MERCH01",
+		"subMerchantId":      "SUBMERCH01",
+		"storeId":            "STORE01",
+		"terminalId":         "TERM01",
+		"validityPeriod":     "2020-12-20T10:00:00+07:00",
 	}
-	amount, ok := got["amount"].(map[string]any)
-	if !ok || amount["value"] != "50000.00" {
-		t.Errorf(`wire body["amount"] = %v, want {"value":"50000.00","currency":"IDR"}`, got["amount"])
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("wire body = %v, want %v", got, want)
 	}
 }
 

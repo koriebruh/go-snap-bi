@@ -83,9 +83,12 @@ func TestDecodeQRMPM_RequestBodyRoundTrips(t *testing.T) {
 	hb.EndpointURL = server.URL + "/v1.0/qr/qr-mpm-decode"
 	tr := &Transport{}
 	req := DecodeQRMPMRequest{
-		QRContent: "00020101021226610014ID.CO.QRIS.WWW",
-		ScanTime:  "2020-12-20T10:00:00+07:00",
-		Amount:    &Money{Value: "75000.00", Currency: "IDR"},
+		PartnerReferenceNo: "partner-ref-1",
+		QRContent:          "00020101021226610014ID.CO.QRIS.WWW",
+		Amount:             &Money{Value: "75000.00", Currency: "IDR"},
+		MerchantID:         "MERCH01",
+		SubMerchantID:      "SUBMERCH01",
+		ScanTime:           "2020-12-20T10:00:00+07:00",
 	}
 	if _, err := DecodeQRMPM(context.Background(), tr, hb, req); err != nil {
 		t.Fatalf("DecodeQRMPM() error = %v", err)
@@ -97,15 +100,16 @@ func TestDecodeQRMPM_RequestBodyRoundTrips(t *testing.T) {
 	if err := json.Unmarshal(gotBody, &got); err != nil {
 		t.Fatalf("decode request body the server received: %v", err)
 	}
-	if got["qrContent"] != "00020101021226610014ID.CO.QRIS.WWW" {
-		t.Errorf(`wire body["qrContent"] = %v, want %q`, got["qrContent"], "00020101021226610014ID.CO.QRIS.WWW")
+	want := map[string]any{
+		"partnerReferenceNo": "partner-ref-1",
+		"qrContent":          "00020101021226610014ID.CO.QRIS.WWW",
+		"amount":             map[string]any{"value": "75000.00", "currency": "IDR"},
+		"merchantId":         "MERCH01",
+		"subMerchantId":      "SUBMERCH01",
+		"scanTime":           "2020-12-20T10:00:00+07:00",
 	}
-	if got["scanTime"] != "2020-12-20T10:00:00+07:00" {
-		t.Errorf(`wire body["scanTime"] = %v, want "2020-12-20T10:00:00+07:00"`, got["scanTime"])
-	}
-	amount, ok := got["amount"].(map[string]any)
-	if !ok || amount["value"] != "75000.00" {
-		t.Errorf(`wire body["amount"] = %v, want {"value":"75000.00","currency":"IDR"}`, got["amount"])
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("wire body = %v, want %v", got, want)
 	}
 }
 
@@ -151,6 +155,9 @@ func TestDecodeQRMPM_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 			t.Errorf(`wire body[%q] = %v, want ""`, key, v)
 		}
 	}
+	if len(got) != 2 {
+		t.Errorf(`wire body = %v, want exactly {"qrContent":"","scanTime":""} (every other field Optional and unset)`, got)
+	}
 }
 
 // TestDecodeQRMPMResponse_MerchantInfosHasNoOmitempty pins that
@@ -191,6 +198,27 @@ func TestMPMMerchantInfo_MerchantPANRoundTripsQuotedString(t *testing.T) {
 	}
 	if got["merchantPAN"] != "9360001234567890" {
 		t.Errorf(`marshaled merchantPAN = %v (%T), want quoted string "9360001234567890"`, got["merchantPAN"], got["merchantPAN"])
+	}
+}
+
+// TestMPMMerchantInfo_FieldsHaveNoOmitempty pins that both MerchantPAN
+// and AcquirerName — Mandatory per research §5.9 line 194 — always
+// serialize, even from a zero-value MPMMerchantInfo. Only the array
+// itself (MerchantInfos) was previously pinned; this asymmetry in the
+// same mandatory-array convention was unguarded.
+func TestMPMMerchantInfo_FieldsHaveNoOmitempty(t *testing.T) {
+	b, err := json.Marshal(MPMMerchantInfo{})
+	if err != nil {
+		t.Fatalf("json.Marshal(zero value) error = %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("decode marshaled zero-value MPMMerchantInfo: %v", err)
+	}
+	for _, key := range []string{"merchantPAN", "acquirerName"} {
+		if _, ok := got[key]; !ok {
+			t.Errorf(`marshaled zero-value MPMMerchantInfo missing %q key; want it always present`, key)
+		}
 	}
 }
 
