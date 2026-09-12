@@ -55,6 +55,10 @@
 //     (docs/superpowers/specs/2026-09-11-phase25-transaction-status-inquiry-nonbank-design.md)
 //   - DirectDebitPayment, DirectDebitPaymentStatus
 //     (docs/superpowers/specs/2026-09-12-phase26-direct-debit-payment-status-design.md)
+//   - DirectDebitPaymentCancel, DirectDebitPaymentRefund, plus an
+//     inbound-only notification type for Direct Debit Payment
+//     Notification (completes the Direct Debit sub-group)
+//     (docs/superpowers/specs/2026-09-12-phase27-direct-debit-notify-cancel-refund-design.md)
 //
 // All of Transfer Kredit is now implemented. Transfer Debit (4
 // sub-groups: Direct Debit, CPM, Auth Payment, Direct Debit BI-FAST,
