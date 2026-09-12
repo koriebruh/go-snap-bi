@@ -12,6 +12,19 @@ import (
 	"testing"
 )
 
+// TestQRMPMRefundPaymentTypes_FieldCounts guards against a field
+// silently added to either type without updating the wire-assertion
+// tests above — those tests catch renamed/omitempty-flipped fields but
+// not an addition, since a new field defaults to unset and unasserted.
+func TestQRMPMRefundPaymentTypes_FieldCounts(t *testing.T) {
+	if n := reflect.TypeOf(QRMPMRefundPaymentRequest{}).NumField(); n != 9 {
+		t.Errorf("QRMPMRefundPaymentRequest has %d fields, want 9", n)
+	}
+	if n := reflect.TypeOf(QRMPMRefundPaymentResponse{}).NumField(); n != 6 {
+		t.Errorf("QRMPMRefundPaymentResponse has %d fields, want 6", n)
+	}
+}
+
 func TestQRMPMRefundPayment_ParsesResponse(t *testing.T) {
 	const fixture = `{
    "responseCode":"2007800",

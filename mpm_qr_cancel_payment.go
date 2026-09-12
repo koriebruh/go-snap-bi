@@ -24,7 +24,11 @@ type QRMPMCancelPaymentRequest struct {
 }
 
 // QRMPMCancelPaymentResponse is the response body for API Cancel
-// Payment.
+// Payment. CancelTime is Conditional per research §5.9 line 204 (no
+// further condition given in that row, unlike Transfer To OTC Cancel
+// Payment's documented "must be filled if cancelled transaction
+// success", Phase 20) — modeled Optional, matching the package's
+// standard handling of Conditional fields. TransactionDate is Optional.
 type QRMPMCancelPaymentResponse struct {
 	ResponseCode    string `json:"responseCode"`
 	ResponseMessage string `json:"responseMessage"`
