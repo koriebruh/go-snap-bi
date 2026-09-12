@@ -95,10 +95,12 @@ func TestQRMPMPaymentNotificationResponse_RoundTrips(t *testing.T) {
 	}
 }
 
-// TestQRMPMPaymentNotificationResponse_IsEnvelopeOnly pins that the
-// response has exactly the two envelope fields — research documents it
-// as "envelope-only" (§5.9 line 202); a future edit adding a field
-// without updating this test would be a signal to re-check that claim.
+// TestQRMPMPaymentNotificationResponse_IsEnvelopeOnly pins the field
+// count only (a name or tag rename is covered separately by
+// TestQRMPMPaymentNotificationResponse_RoundTrips) — research documents
+// this response as "envelope-only" (§5.9 line 202); a future edit
+// adding a field without updating this test would be a signal to
+// re-check that claim.
 func TestQRMPMPaymentNotificationResponse_IsEnvelopeOnly(t *testing.T) {
 	typ := reflect.TypeOf(QRMPMPaymentNotificationResponse{})
 	if typ.NumField() != 2 {
