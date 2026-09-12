@@ -51,9 +51,13 @@
 //   - QRMPMCancelPayment, QRMPMRefundPayment (completes the MPM/QR
 //     sub-group)
 //     (docs/superpowers/specs/2026-09-11-phase24-mpm-qr-cancel-refund-design.md)
+//   - TransactionStatusInquiryNonBank (completes Transfer Kredit)
+//     (docs/superpowers/specs/2026-09-11-phase25-transaction-status-inquiry-nonbank-design.md)
 //
-// Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
-// etc.) are not yet implemented. See
+// All of Transfer Kredit is now implemented. Transfer Debit (Direct
+// Debit, CPM/QR, Auth Payment, Direct Debit BI-FAST) remains entirely
+// unresearched and needs its own research pass before any design doc
+// can be written for it. See
 // docs/research/2026-09-11-transfer-kredit-portal-research.md for the
 // full Transfer Kredit endpoint inventory.
 package snap
