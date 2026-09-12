@@ -61,10 +61,14 @@ type TransactionStatusInquiryNonBankResponse struct {
 
 // TransactionStatusInquiryNonBank calls the SNAP Transaction Status
 // Inquiry (non-bank) endpoint (Service Code 53, path
-// .../{version}/qr/qr-mpm-status, HTTP POST — no method override). hb
-// must already carry every field HeaderBuilder needs except Body,
-// which TransactionStatusInquiryNonBank sets itself so the exact
-// marshaled bytes are used for both signing and the wire body.
+// .../{version}/qr/qr-mpm-status, HTTP POST — no method override). The
+// shared qr/ path prefix does not mean this belongs to the MPM/QR
+// sub-group: research §5.10 is its own sub-group, distinct from §5.9
+// MPM/QR, and the path naming is the portal's own inconsistency, not a
+// signal to prefix this type QRMPM*. hb must already carry every field
+// HeaderBuilder needs except Body, which TransactionStatusInquiryNonBank
+// sets itself so the exact marshaled bytes are used for both signing
+// and the wire body.
 //
 // This is a read-only status query and carries no non-idempotency
 // note, matching TransactionStatusInquiryBank's precedent.
