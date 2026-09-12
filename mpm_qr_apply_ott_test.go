@@ -75,6 +75,9 @@ func TestApplyOTT_RequestBodyIsBareArray(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
+	if string(gotBody) != `["OTT"]` {
+		t.Errorf(`wire body = %s, want ["OTT"] as a bare array (not {"userResources":[...]})`, gotBody)
+	}
 	var got []string
 	if err := json.Unmarshal(gotBody, &got); err != nil {
 		t.Fatalf("wire body = %s, want a top-level JSON array, got decode error: %v", gotBody, err)
@@ -82,6 +85,41 @@ func TestApplyOTT_RequestBodyIsBareArray(t *testing.T) {
 	want := []string{"OTT"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("wire body = %v, want %v", got, want)
+	}
+}
+
+// TestApplyOTT_NilRequestMarshalsToJSONNull pins the documented,
+// unguarded behavior of a nil ApplyOTTRequest: it marshals to the JSON
+// literal null, not an empty array. The package does no client-side
+// validation, so this is recorded as caller responsibility, not
+// prevented here.
+func TestApplyOTT_NilRequestMarshalsToJSONNull(t *testing.T) {
+	var mu sync.Mutex
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		mu.Lock()
+		gotBody = b
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2004900","responseMessage":"ok","userResources":[]}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/qr/apply-ott"
+	tr := &Transport{}
+	if _, err := ApplyOTT(context.Background(), tr, hb, nil); err != nil {
+		t.Fatalf("ApplyOTT() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if string(gotBody) != "null" {
+		t.Errorf(`wire body = %s, want "null" (documented nil-slice marshal behavior)`, gotBody)
 	}
 }
 

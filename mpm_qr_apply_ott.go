@@ -19,6 +19,11 @@ import (
 // top-level JSON array — the literal reading of the worked example.
 // The alternative reading ({"userResources":[...]}) is recorded here
 // but not implemented; needs sandbox/Postman verification.
+//
+// A nil ApplyOTTRequest marshals to the JSON literal null, not []; the
+// package does no client-side validation anywhere (matching its
+// general practice), so callers must pass a non-nil, non-empty slice
+// themselves.
 type ApplyOTTRequest []string
 
 // ApplyOTTUserResource is one entry in an ApplyOTTResponse's
