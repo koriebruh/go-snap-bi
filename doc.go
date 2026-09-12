@@ -45,6 +45,9 @@
 //     (docs/superpowers/specs/2026-09-11-phase21-mpm-qr-generate-decode-design.md)
 //   - ApplyOTT, QRMPMPaymentH2H
 //     (docs/superpowers/specs/2026-09-11-phase22-mpm-qr-apply-ott-payment-h2h-design.md)
+//   - QRMPMQueryPayment, plus inbound-only notification types for
+//     Payment Notification
+//     (docs/superpowers/specs/2026-09-11-phase23-mpm-qr-query-payment-notification-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See
