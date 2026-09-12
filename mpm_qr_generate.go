@@ -23,7 +23,7 @@ type GenerateQRMPMRequest struct {
 
 // GenerateQRMPMResponse is the response body for API Generate QR MPM.
 //
-// QRContent, QRUrl, and QRImage form a one-of-three condition the type
+// QRContent, QRURL, and QRImage form a one-of-three condition the type
 // system cannot express: per the Guides tab, "if [qrContent is] null,
 // qrUrl or qrImage must be filled." All three are Optional here; callers
 // must check which of the three came back non-empty.
@@ -31,9 +31,9 @@ type GenerateQRMPMResponse struct {
 	ResponseCode    string `json:"responseCode"`
 	ResponseMessage string `json:"responseMessage"`
 	QRContent       string `json:"qrContent,omitempty"`
-	QRUrl           string `json:"qrUrl,omitempty"`
+	QRURL           string `json:"qrUrl,omitempty"`
 	QRImage         string `json:"qrImage,omitempty"` // base64, String(unlimited) — bounded only by the shared transport read cap
-	RedirectUrl     string `json:"redirectUrl,omitempty"`
+	RedirectURL     string `json:"redirectUrl,omitempty"`
 	MerchantName    string `json:"merchantName,omitempty"`
 	StoreID         string `json:"storeId,omitempty"`
 	TerminalID      string `json:"terminalId,omitempty"`

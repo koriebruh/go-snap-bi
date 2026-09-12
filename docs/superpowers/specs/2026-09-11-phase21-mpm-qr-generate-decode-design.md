@@ -58,8 +58,8 @@ row genuinely lists none as `M`.
 
 `GenerateQRMPMResponse`: `ResponseCode string`, `ResponseMessage string`,
 `QRContent string` C (omitempty; see contradiction note above) +
-`QRUrl string` O (String(256)) + `QRImage string` O (base64,
-unlimited) + `RedirectUrl string` O (String(512)) + `MerchantName string`
+`QRURL string` O (String(256)) + `QRImage string` O (base64,
+unlimited) + `RedirectURL string` O (String(512)) + `MerchantName string`
 O + `StoreID string` O + `TerminalID string` O.
 
 ### DecodeQRMPM (48)
@@ -71,7 +71,7 @@ String(25)).
 
 `DecodeQRMPMResponse`: `ResponseCode string`, `ResponseMessage string`,
 `ReferenceNo string` C (omitempty; see contradiction note) +
-`RedirectUrl string` C (omitempty; see contradiction note) +
+`RedirectURL string` C (omitempty; see contradiction note) +
 `MerchantName string` C + `MerchantCategory string` C +
 `MerchantLocation string` C (all three from "merchantName/Category/
 Location C") + `MerchantInfos []MPMMerchantInfo` M (no omitempty,

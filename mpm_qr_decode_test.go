@@ -48,7 +48,7 @@ func TestDecodeQRMPM_ParsesResponse(t *testing.T) {
 		ResponseCode:     "2004800",
 		ResponseMessage:  "Request has been processed successfully",
 		ReferenceNo:      "ref-1",
-		RedirectUrl:      "https://example.com/redirect",
+		RedirectURL:      "https://example.com/redirect",
 		MerchantName:     "Toko Maju",
 		MerchantCategory: "5411",
 		MerchantLocation: "Jakarta",
@@ -102,6 +102,10 @@ func TestDecodeQRMPM_RequestBodyRoundTrips(t *testing.T) {
 	}
 	if got["scanTime"] != "2020-12-20T10:00:00+07:00" {
 		t.Errorf(`wire body["scanTime"] = %v, want "2020-12-20T10:00:00+07:00"`, got["scanTime"])
+	}
+	amount, ok := got["amount"].(map[string]any)
+	if !ok || amount["value"] != "75000.00" {
+		t.Errorf(`wire body["amount"] = %v, want {"value":"75000.00","currency":"IDR"}`, got["amount"])
 	}
 }
 
@@ -187,6 +191,38 @@ func TestMPMMerchantInfo_MerchantPANRoundTripsQuotedString(t *testing.T) {
 	}
 	if got["merchantPAN"] != "9360001234567890" {
 		t.Errorf(`marshaled merchantPAN = %v (%T), want quoted string "9360001234567890"`, got["merchantPAN"], got["merchantPAN"])
+	}
+}
+
+// TestDecodeQRMPM_MerchantPANAcceptsBareNumber pins the other half of
+// merchantPAN's ambiguous-type contract: documented Numeric(19), so a
+// bare (unquoted) JSON number must also round-trip byte-for-byte,
+// mirroring TestVAInquiryStatus_CustomerNoAcceptsBareNumber's precedent
+// for the same documented-Numeric-quoted-on-wire shape.
+func TestDecodeQRMPM_MerchantPANAcceptsBareNumber(t *testing.T) {
+	const bareNumber = `9360001234567890123`
+	fixture := `{"responseCode":"2004800","responseMessage":"ok","merchantInfos":[{"merchantPAN":` + bareNumber + `,"acquirerName":"Bank ABC"}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(fixture))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/qr/qr-mpm-decode"
+	tr := &Transport{}
+	resp, err := DecodeQRMPM(context.Background(), tr, hb, DecodeQRMPMRequest{
+		QRContent: "00020101021226610014ID.CO.QRIS.WWW",
+		ScanTime:  "2020-12-20T10:00:00+07:00",
+	})
+	if err != nil {
+		t.Fatalf("DecodeQRMPM() error = %v", err)
+	}
+	if len(resp.MerchantInfos) != 1 {
+		t.Fatalf("DecodeQRMPM() MerchantInfos = %v, want 1 entry", resp.MerchantInfos)
+	}
+	if string(resp.MerchantInfos[0].MerchantPAN) != bareNumber {
+		t.Errorf("MerchantPAN = %s, want %s", resp.MerchantInfos[0].MerchantPAN, bareNumber)
 	}
 }
 

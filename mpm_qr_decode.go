@@ -33,7 +33,7 @@ type DecodeQRMPMRequest struct {
 
 // DecodeQRMPMResponse is the response body for API Decode QR MPM.
 //
-// ReferenceNo and RedirectUrl carry contradictory conditional labels in
+// ReferenceNo and RedirectURL carry contradictory conditional labels in
 // the source documentation — "Mandatory if redirect" and "Mandatory if
 // H2H mode" respectively, which read as opposite branches of the same
 // condition (research §6 item 8, unresolved). Both are modeled Optional;
@@ -42,7 +42,7 @@ type DecodeQRMPMResponse struct {
 	ResponseCode      string            `json:"responseCode"`
 	ResponseMessage   string            `json:"responseMessage"`
 	ReferenceNo       string            `json:"referenceNo,omitempty"`
-	RedirectUrl       string            `json:"redirectUrl,omitempty"`
+	RedirectURL       string            `json:"redirectUrl,omitempty"`
 	MerchantName      string            `json:"merchantName,omitempty"`
 	MerchantCategory  string            `json:"merchantCategory,omitempty"`
 	MerchantLocation  string            `json:"merchantLocation,omitempty"`
