@@ -173,10 +173,13 @@ func TestQRMPMQueryPayment_MandatoryFieldAlwaysSerialized(t *testing.T) {
 }
 
 // TestQRMPMQueryPaymentResponse_AlwaysPresentFieldsHaveNoOmitempty
-// pins that BeneficiaryAccountNo, ReferenceNumber, SourceAccountNo, and
-// LatestTransactionStatus — carried over from
-// TransactionStatusInquiryBankResponse without omitempty — still lack
-// it here, matching the base type exactly.
+// pins that ResponseCode, ResponseMessage, BeneficiaryAccountNo,
+// ReferenceNumber, SourceAccountNo, and LatestTransactionStatus — the
+// only fields without omitempty, carried over from
+// TransactionStatusInquiryBankResponse — are exactly the keys a
+// zero-value marshal produces. An exact-map comparison (not just a
+// presence check) also catches a mutation that dropped omitempty from
+// any of the other, Optional fields.
 func TestQRMPMQueryPaymentResponse_AlwaysPresentFieldsHaveNoOmitempty(t *testing.T) {
 	b, err := json.Marshal(QRMPMQueryPaymentResponse{})
 	if err != nil {
@@ -186,10 +189,16 @@ func TestQRMPMQueryPaymentResponse_AlwaysPresentFieldsHaveNoOmitempty(t *testing
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("decode marshaled zero-value response: %v", err)
 	}
-	for _, key := range []string{"beneficiaryAccountNo", "referenceNumber", "sourceAccountNo", "latestTransactionStatus"} {
-		if _, ok := got[key]; !ok {
-			t.Errorf(`marshaled zero-value response missing %q key; want it always present`, key)
-		}
+	want := map[string]any{
+		"responseCode":            "",
+		"responseMessage":         "",
+		"beneficiaryAccountNo":    "",
+		"referenceNumber":         "",
+		"sourceAccountNo":         "",
+		"latestTransactionStatus": "",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("marshaled zero-value response = %v, want %v", got, want)
 	}
 }
 
