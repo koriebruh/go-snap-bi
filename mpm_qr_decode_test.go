@@ -226,7 +226,8 @@ func TestMPMMerchantInfo_FieldsHaveNoOmitempty(t *testing.T) {
 // merchantPAN's ambiguous-type contract: documented Numeric(19), so a
 // bare (unquoted) JSON number must also round-trip byte-for-byte,
 // mirroring TestVAInquiryStatus_CustomerNoAcceptsBareNumber's precedent
-// for the same documented-Numeric-quoted-on-wire shape.
+// for the same ambiguous-type rule (opposite direction: customerNo is
+// documented String with a bare number on the wire).
 func TestDecodeQRMPM_MerchantPANAcceptsBareNumber(t *testing.T) {
 	const bareNumber = `9360001234567890123`
 	fixture := `{"responseCode":"2004800","responseMessage":"ok","merchantInfos":[{"merchantPAN":` + bareNumber + `,"acquirerName":"Bank ABC"}]}`
