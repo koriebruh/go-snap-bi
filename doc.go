@@ -48,6 +48,9 @@
 //   - QRMPMQueryPayment, plus inbound-only notification types for
 //     Payment Notification
 //     (docs/superpowers/specs/2026-09-11-phase23-mpm-qr-query-payment-notification-design.md)
+//   - QRMPMCancelPayment, QRMPMRefundPayment (completes the MPM/QR
+//     sub-group)
+//     (docs/superpowers/specs/2026-09-11-phase24-mpm-qr-cancel-refund-design.md)
 //
 // Most services (remaining Transfer Kredit sub-groups, Transfer Debit,
 // etc.) are not yet implemented. See
