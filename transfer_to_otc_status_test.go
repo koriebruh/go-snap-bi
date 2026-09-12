@@ -98,6 +98,7 @@ func TestTransferToOTCTransferStatus_RequestBodyRoundTrips(t *testing.T) {
 		ServiceCode:                "44",
 		CustomerNumber:             "98765",
 		Amount:                     Money{Value: "100000.00", Currency: "IDR"},
+		AdditionalInfo:             json.RawMessage(`{"channel":"mobilephone"}`),
 	}
 	if _, err := TransferToOTCTransferStatus(context.Background(), tr, hb, req); err != nil {
 		t.Fatalf("TransferToOTCTransferStatus() error = %v", err)
@@ -115,6 +116,10 @@ func TestTransferToOTCTransferStatus_RequestBodyRoundTrips(t *testing.T) {
 	amount, ok := got["amount"].(map[string]any)
 	if !ok || amount["value"] != "100000.00" {
 		t.Errorf(`wire body["amount"] = %v, want {"value":"100000.00","currency":"IDR"}`, got["amount"])
+	}
+	additionalInfo, ok := got["additionalInfo"].(map[string]any)
+	if !ok || additionalInfo["channel"] != "mobilephone" {
+		t.Errorf(`wire body["additionalInfo"] = %v, want {"channel":"mobilephone"}`, got["additionalInfo"])
 	}
 }
 
