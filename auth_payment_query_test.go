@@ -1,8 +1,14 @@
 package snap
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"sync"
 	"testing"
 )
 
@@ -79,7 +85,7 @@ func TestAuthPaymentQueryRequest_ZeroValueMarshalsEmpty(t *testing.T) {
 
 func TestAuthPaymentQueryResponse_RoundTrips(t *testing.T) {
 	const fixture = `{
-   "responseCode":"2007400",
+   "responseCode":"2006400",
    "responseMessage":"Request has been processed successfully",
    "originalPartnerReferenceNo":"partner-ref-1",
    "originalReferenceNo":"ref-1",
@@ -94,7 +100,7 @@ func TestAuthPaymentQueryResponse_RoundTrips(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 	want := AuthPaymentQueryResponse{
-		ResponseCode:               "2007400",
+		ResponseCode:               "2006400",
 		ResponseMessage:            "Request has been processed successfully",
 		OriginalPartnerReferenceNo: "partner-ref-1",
 		OriginalReferenceNo:        "ref-1",
@@ -139,7 +145,7 @@ func TestAuthPaymentQueryResponse_MandatoryFieldsHaveNoOmitempty(t *testing.T) {
 // OriginalPartnerReferenceNo via Go's case-insensitive JSON decode.
 func TestAuthPaymentQueryResponse_LowercasePCasingUnmarshalsCorrectly(t *testing.T) {
 	const fixture = `{
-   "responseCode":"2007400",
+   "responseCode":"2006400",
    "responseMessage":"Request has been processed successfully",
    "originalpartnerReferenceNo":"partner-ref-1",
    "amount":{"value":"50000.00","currency":"IDR"},
@@ -161,5 +167,146 @@ func TestAuthPaymentQuery_MalformedAdditionalInfoIsMarshalError(t *testing.T) {
 	}
 	if _, err := json.Marshal(req); err == nil {
 		t.Error("json.Marshal() error = nil, want an error for malformed AdditionalInfo")
+	}
+}
+
+func TestAuthPaymentQuery_ParsesResponse(t *testing.T) {
+	const fixture = `{
+   "responseCode":"2006400",
+   "responseMessage":"Request has been processed successfully",
+   "originalPartnerReferenceNo":"partner-ref-1",
+   "originalReferenceNo":"ref-1",
+   "amount":{"value":"50000.00","currency":"IDR"},
+   "paidTime":"2026-09-13T10:00:00+07:00",
+   "latestTransactionStatus":"00",
+   "transactionStatusDesc":"Success",
+   "additionalInfo":{"note":"resp-value"}
+}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(fixture))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	tr := &Transport{}
+	resp, err := AuthPaymentQuery(context.Background(), tr, hb, AuthPaymentQueryRequest{
+		OriginalPartnerReferenceNo: "partner-ref-1",
+	})
+	if err != nil {
+		t.Fatalf("AuthPaymentQuery() error = %v", err)
+	}
+
+	want := AuthPaymentQueryResponse{
+		ResponseCode:               "2006400",
+		ResponseMessage:            "Request has been processed successfully",
+		OriginalPartnerReferenceNo: "partner-ref-1",
+		OriginalReferenceNo:        "ref-1",
+		Amount:                     Money{Value: "50000.00", Currency: "IDR"},
+		PaidTime:                   "2026-09-13T10:00:00+07:00",
+		LatestTransactionStatus:    "00",
+		TransactionStatusDesc:      "Success",
+		AdditionalInfo:             json.RawMessage(`{"note":"resp-value"}`),
+	}
+	if !reflect.DeepEqual(resp, want) {
+		t.Errorf("AuthPaymentQuery() = %+v, want %+v", resp, want)
+	}
+}
+
+func TestAuthPaymentQuery_RequestBodyRoundTrips(t *testing.T) {
+	var mu sync.Mutex
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		mu.Lock()
+		gotBody = b
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"responseCode":"2006400","responseMessage":"ok","amount":{"value":"","currency":""},"paidTime":"","latestTransactionStatus":""}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	tr := &Transport{}
+	req := AuthPaymentQueryRequest{
+		OriginalPartnerReferenceNo: "partner-ref-1",
+		MerchantID:                 "MERCHANT001",
+	}
+	if _, err := AuthPaymentQuery(context.Background(), tr, hb, req); err != nil {
+		t.Fatalf("AuthPaymentQuery() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	var got map[string]any
+	if err := json.Unmarshal(gotBody, &got); err != nil {
+		t.Fatalf("decode request body the server received: %v", err)
+	}
+	if got["originalPartnerReferenceNo"] != "partner-ref-1" {
+		t.Errorf(`wire body["originalPartnerReferenceNo"] = %v, want "partner-ref-1"`, got["originalPartnerReferenceNo"])
+	}
+	if got["merchantId"] != "MERCHANT001" {
+		t.Errorf(`wire body["merchantId"] = %v, want "MERCHANT001"`, got["merchantId"])
+	}
+}
+
+func TestAuthPaymentQuery_NonTwoXXResponseCodeIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"responseCode":"4006400","responseMessage":"Bad Request"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	tr := &Transport{}
+	_, err := AuthPaymentQuery(context.Background(), tr, hb, AuthPaymentQueryRequest{})
+	if err == nil {
+		t.Fatal("AuthPaymentQuery() error = nil, want non-nil for a non-2xx responseCode")
+	}
+	if !errors.Is(err, ErrBadRequest) {
+		t.Errorf("AuthPaymentQuery() error = %v, want errors.Is(err, ErrBadRequest)", err)
+	}
+}
+
+func TestAuthPaymentQuery_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"responseCode":"2006400","responseMessage":"ok"}`))
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	tr := &Transport{}
+	resp, err := AuthPaymentQuery(context.Background(), tr, hb, AuthPaymentQueryRequest{})
+	if err == nil {
+		t.Fatalf("AuthPaymentQuery() error = nil, want non-nil for HTTP 500 with a 2xx-shaped body; got %+v", resp)
+	}
+	if !errors.Is(err, ErrInternalServerError) {
+		t.Errorf("AuthPaymentQuery() error = %v, want errors.Is(err, ErrInternalServerError)", err)
+	}
+}
+
+func TestAuthPaymentQuery_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"originalReferenceNo":"ref-1"}`)) // valid JSON, no responseCode field
+	}))
+	defer server.Close()
+
+	hb := testHeaderBuilder(server.URL)
+	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	tr := &Transport{}
+	resp, err := AuthPaymentQuery(context.Background(), tr, hb, AuthPaymentQueryRequest{})
+	if err == nil {
+		t.Fatalf("AuthPaymentQuery() error = nil, want non-nil; got zero-value response = %+v", resp)
 	}
 }

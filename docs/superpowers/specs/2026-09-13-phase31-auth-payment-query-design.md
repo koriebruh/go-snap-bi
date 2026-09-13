@@ -108,3 +108,27 @@ Both new types (four structs including responses) get `FieldCounts`
 guard tests per the established convention, plus mandatory-field
 zero-value presence tests and full wire-body map comparisons in
 round-trip tests, per the conventions reinforced in Phases 26 and 30.
+
+## go-review fixes (round 1)
+
+Two issues found and fixed before santa-loop:
+
+1. **HIGH — zero transport-level test coverage.** The initial test
+   files only exercised struct marshal/unmarshal and never called
+   `AuthPayment`/`AuthPaymentQuery` themselves, leaving `hb.Body`
+   assignment, `checkResponseStatus` wiring, and the empty-`ResponseCode`
+   guard entirely untested (0.0% coverage, the only two functions in the
+   package at that level). Fixed by adding the standard `httptest`-backed
+   suite every other endpoint file carries: `_ParsesResponse`,
+   `_RequestBodyRoundTrips`, `_NonTwoXXResponseCodeIsError`,
+   `_NonTwoXXStatusWithTwoXXBodyIsError`, `_TwoXXStatusWithNoResponseCodeIsError`,
+   mirroring `transaction_status_inquiry_bank_test.go` exactly. This
+   section itself is the fix for the doc gap that let it happen — Phases
+   32/33 must include these five test shapes too, not just FieldCounts/
+   round-trip/zero-value.
+2. **MEDIUM — wrong response-code fixtures.** Test fixtures used
+   `"2007300"`/`"2007400"` (Service Codes 73/74, both unrelated and
+   already assigned elsewhere in research) instead of the correct
+   `"2006300"`/`"2006400"` for Service Codes 63/64 (responseCode =
+   HTTPStatus(3) + ServiceCode(2) + CaseCode(2), per `ParseResponseCode`).
+   Fixed by correcting every fixture in both test files.
