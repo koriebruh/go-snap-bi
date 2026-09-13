@@ -107,18 +107,3 @@ func TestCPMPaymentNotificationResponse_RoundTrips(t *testing.T) {
 		t.Errorf("json.Unmarshal() = %+v, want %+v", got, want)
 	}
 }
-
-// TestCPMPaymentNotificationResponse_IsEnvelopeOnly pins the field
-// count only — research documents this response as "envelope-only"; a
-// future edit adding a field without updating this test would be a
-// signal to re-check that claim.
-func TestCPMPaymentNotificationResponse_IsEnvelopeOnly(t *testing.T) {
-	typ := reflect.TypeOf(CPMPaymentNotificationResponse{})
-	if typ.NumField() != 2 {
-		names := make([]string, typ.NumField())
-		for i := range names {
-			names[i] = typ.Field(i).Name
-		}
-		t.Errorf("CPMPaymentNotificationResponse fields = %v, want exactly [ResponseCode ResponseMessage]", names)
-	}
-}

@@ -71,11 +71,19 @@ as `QRMPMCancelPaymentResponse.CancelTime`), `TransactionDate O`,
 ## Payment Notification (79) — inbound, struct-only
 
 Research explicitly confirms this one matches Transfer Kredit's
-`QRMPMPaymentNotification` pattern (envelope-only response, inbound
-settlement callback, no calling function) — unlike Cancel Payment
-above, this citation is verified consistent with the shape given, not
-contradicted. Struct-only per the package's established convention for
-"Notify"-named/settlement-callback-shaped endpoints.
+`QRMPMPaymentNotification` pattern in direction and response shape
+(envelope-only response, inbound settlement callback, no calling
+function) — unlike Cancel Payment above, this citation is verified
+consistent with what's given, not contradicted. This is a claim about
+direction and response shape only, not the request shape:
+`QRMPMPaymentNotificationRequest`'s own Mandatory field is
+`OriginalReferenceNo`, not `MerchantID`, and it lacks several fields
+this endpoint's request has (`merchantId`, `subMerchantId`,
+`externalStoreId`, `transactionStatusDesc`, `additionalInfo`) — the two
+requests are not identical, only the notification pattern (struct-only,
+inbound, envelope-only response) is shared. Struct-only per the
+package's established convention for "Notify"-named/settlement-
+callback-shaped endpoints.
 
 `CPMPaymentNotificationRequest`: `OriginalPartnerReferenceNo O`,
 `OriginalReferenceNo O`, `MerchantID string` M (no omitempty),
@@ -118,7 +126,7 @@ All three follow the package's standard pattern: marshal `req`, set
 `hb.Body`, call `t.Do`, `checkResponseStatus`, unmarshal into
 `Response`, error if `ResponseCode == ""`. POST, no method override.
 Query is read-only (no non-idempotency note, matching
-`TransactionStatusInquiryBank`/`CPMQueryPayment` precedent). Cancel and
+`TransactionStatusInquiryBank`'s precedent). Cancel and
 Refund are not idempotent (matching `QRMPMCancelPayment`/
 `QRMPMRefundPayment`) — non-idempotency doc-comment note included,
 keyed on X-EXTERNAL-ID.
