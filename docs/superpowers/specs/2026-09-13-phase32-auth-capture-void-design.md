@@ -139,3 +139,15 @@ malformed-`AdditionalInfo`-is-marshal-error test, AND the full
 `_TwoXXStatusWithNoResponseCodeIsError`) — Phase 31's go-review found
 the calling functions themselves untested when only the struct-level
 tests were written; this phase does not repeat that gap.
+
+## go-review fixes (round 1)
+
+One LOW finding: `AuthCaptureQueryRequest`'s and `AuthVoidQueryRequest`'s
+doc comments claimed `PartnerCaptureNo`/`PartnerVoidNo` was "the only
+Mandatory field" — inaccurate copy-paste drift from
+`auth_payment_query.go`'s genuinely all-Optional request comment.
+Research §5.3 actually gives three Mandatory fields for both 66 and
+68: `originalReferenceNo`, `merchantId`, and
+`partnerCaptureNo`/`partnerVoidNo` — the struct tags and mandatory-field
+tests were already correct, only the prose was wrong. Fixed by
+correcting both doc comments; no code or test change needed.

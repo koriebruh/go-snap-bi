@@ -8,8 +8,8 @@ import (
 )
 
 // AuthVoidQueryRequest is the request body for API Void Query (Service
-// Code 68, path .../{version}/auth/void-query). PartnerVoidNo is the
-// only Mandatory field.
+// Code 68, path .../{version}/auth/void-query). OriginalReferenceNo,
+// MerchantID, and PartnerVoidNo are Mandatory.
 type AuthVoidQueryRequest struct {
 	OriginalReferenceNo        string          `json:"originalReferenceNo"`
 	OriginalPartnerReferenceNo string          `json:"originalPartnerReferenceNo,omitempty"`

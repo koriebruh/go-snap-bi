@@ -9,7 +9,7 @@ import (
 
 // AuthCaptureQueryRequest is the request body for API Capture Query
 // (Service Code 66, path .../{version}/auth/capture-query).
-// PartnerCaptureNo is the only Mandatory field.
+// OriginalReferenceNo, MerchantID, and PartnerCaptureNo are Mandatory.
 type AuthCaptureQueryRequest struct {
 	OriginalReferenceNo        string          `json:"originalReferenceNo"`
 	OriginalPartnerReferenceNo string          `json:"originalPartnerReferenceNo,omitempty"`
