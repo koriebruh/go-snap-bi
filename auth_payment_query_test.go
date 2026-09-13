@@ -104,7 +104,7 @@ func TestAuthPaymentQueryResponse_RoundTrips(t *testing.T) {
 		ResponseMessage:            "Request has been processed successfully",
 		OriginalPartnerReferenceNo: "partner-ref-1",
 		OriginalReferenceNo:        "ref-1",
-		Amount:                     Money{Value: "50000.00", Currency: "IDR"},
+		Amount:                     &Money{Value: "50000.00", Currency: "IDR"},
 		PaidTime:                   "2026-09-13T10:00:00+07:00",
 		LatestTransactionStatus:    "00",
 		TransactionStatusDesc:      "Success",
@@ -116,8 +116,9 @@ func TestAuthPaymentQueryResponse_RoundTrips(t *testing.T) {
 }
 
 // TestAuthPaymentQueryResponse_MandatoryFieldsHaveNoOmitempty pins
-// ResponseCode, ResponseMessage, Amount, PaidTime, and
-// LatestTransactionStatus as always-serializing.
+// ResponseCode, ResponseMessage, PaidTime, and LatestTransactionStatus
+// as always-serializing; Amount is Optional (*Money, omitempty) and
+// must be absent from a zero-value response.
 func TestAuthPaymentQueryResponse_MandatoryFieldsHaveNoOmitempty(t *testing.T) {
 	b, err := json.Marshal(AuthPaymentQueryResponse{})
 	if err != nil {
@@ -130,7 +131,6 @@ func TestAuthPaymentQueryResponse_MandatoryFieldsHaveNoOmitempty(t *testing.T) {
 	want := map[string]any{
 		"responseCode":            "",
 		"responseMessage":         "",
-		"amount":                  map[string]any{"value": "", "currency": ""},
 		"paidTime":                "",
 		"latestTransactionStatus": "",
 	}
@@ -189,7 +189,7 @@ func TestAuthPaymentQuery_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	hb.EndpointURL = server.URL + "/v1.0/auth/query"
 	tr := &Transport{}
 	resp, err := AuthPaymentQuery(context.Background(), tr, hb, AuthPaymentQueryRequest{
 		OriginalPartnerReferenceNo: "partner-ref-1",
@@ -203,7 +203,7 @@ func TestAuthPaymentQuery_ParsesResponse(t *testing.T) {
 		ResponseMessage:            "Request has been processed successfully",
 		OriginalPartnerReferenceNo: "partner-ref-1",
 		OriginalReferenceNo:        "ref-1",
-		Amount:                     Money{Value: "50000.00", Currency: "IDR"},
+		Amount:                     &Money{Value: "50000.00", Currency: "IDR"},
 		PaidTime:                   "2026-09-13T10:00:00+07:00",
 		LatestTransactionStatus:    "00",
 		TransactionStatusDesc:      "Success",
@@ -231,7 +231,7 @@ func TestAuthPaymentQuery_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	hb.EndpointURL = server.URL + "/v1.0/auth/query"
 	tr := &Transport{}
 	req := AuthPaymentQueryRequest{
 		OriginalPartnerReferenceNo: "partner-ref-1",
@@ -264,7 +264,7 @@ func TestAuthPaymentQuery_NonTwoXXResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	hb.EndpointURL = server.URL + "/v1.0/auth/query"
 	tr := &Transport{}
 	_, err := AuthPaymentQuery(context.Background(), tr, hb, AuthPaymentQueryRequest{})
 	if err == nil {
@@ -284,7 +284,7 @@ func TestAuthPaymentQuery_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	hb.EndpointURL = server.URL + "/v1.0/auth/query"
 	tr := &Transport{}
 	resp, err := AuthPaymentQuery(context.Background(), tr, hb, AuthPaymentQueryRequest{})
 	if err == nil {
@@ -303,7 +303,7 @@ func TestAuthPaymentQuery_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment-status"
+	hb.EndpointURL = server.URL + "/v1.0/auth/query"
 	tr := &Transport{}
 	resp, err := AuthPaymentQuery(context.Background(), tr, hb, AuthPaymentQueryRequest{})
 	if err == nil {

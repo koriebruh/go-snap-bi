@@ -54,21 +54,23 @@ genuinely untyped fields (`AdditionalInfo`; also `AccountBindingRequest.Addition
 the exact same field name and shape precedent, Phase 28), `AdditionalInfo O`.
 
 Resp: `ReferenceNo C` (success only, omitempty), `PartnerReferenceNo O`,
-`Amount *Money` M (both `value`/`currency` members Mandatory per
-research; modeled as plain, non-pointer `Money` since the container
-itself is Mandatory here, unlike the request side — this is the first
-Auth Payment field where the container itself carries an M marker, so
-it gets the plain-struct treatment per the package's established
-optional-container-vs-mandatory-container rule), `PaidTime string` M
+`Amount` (`value`/`currency` members Mandatory per research; the
+container itself carries no M/O marker either way, same as the request
+side) — modeled as plain, non-pointer `Money`, since this is the
+success response for a hold that was just placed and an amount is
+expected to always be present on it (see the santa-loop round 1 note
+below — this is a narrower judgment call than Payment Query's
+Optional-marked container, not "the container is Mandatory here" as an
+earlier draft of this doc incorrectly claimed), `PaidTime string` M
 (String(25), no omitempty), `AdditionalInfo O`.
 
-Function: POST, no method override, path `debit/auth-payment` (per
-services naming convention — the exact path is not spelled out
-verbatim in research beyond the worked example's host, and is inferred
-consistently with every other Transfer Debit endpoint's `debit/`-prefixed
-paths). Not idempotent (an authorization-initiating call) —
-non-idempotency doc-comment note included, keyed on X-EXTERNAL-ID,
-matching every other initiating call in the package.
+Function: POST, no method override, path `auth/payment` (research §1
+line 36, quoted verbatim — an earlier draft of this doc claimed the
+path "is not spelled out verbatim in research" and invented
+`debit/auth-payment`; that claim was false and is corrected here, see
+santa-loop round 1 below). Not idempotent (an authorization-initiating
+call) — non-idempotency doc-comment note included, keyed on
+X-EXTERNAL-ID, matching every other initiating call in the package.
 
 ## Payment Query (64)
 
@@ -77,9 +79,13 @@ Req: `OriginalPartnerReferenceNo O`, `OriginalReferenceNo O`,
 `AdditionalInfo O` — no Mandatory field.
 
 Resp: `OriginalPartnerReferenceNo O`, `OriginalReferenceNo O`, `Amount
-*Money` M (container M per research, members M — plain `Money`, not
-pointer, same reasoning as Auth Payment's response), `PaidTime string`
-M (String(25), no omitempty), `LatestTransactionStatus string` M (no
+O` (members M) — modeled as `*Money` (pointer, `omitempty`), per the
+package's established rule that an explicitly Optional-marked
+container uses `*Money` regardless of its members' own markers (research
+§6 item 7; an earlier draft of this doc incorrectly modeled this as a
+plain, Mandatory `Money`, claiming a container-level M marker research
+does not give — see santa-loop round 1 below), `PaidTime string` M
+(String(25), no omitempty), `LatestTransactionStatus string` M (no
 omitempty), `TransactionStatusDesc O` (String(50)), `AdditionalInfo O`.
 
 ### Casing contradiction (research §6 item 2) — no code consequence
@@ -97,10 +103,9 @@ consistent with every other occurrence of this field name across the
 whole package. Recorded per research's own instruction not to silently
 resolve table-vs-example contradictions.
 
-Function: POST, no method override, path `debit/auth-payment-status`
-(inferred, matching the `-status`/`-query`-suffix convention already
-used by `DirectDebitPaymentStatus`, Phase 26). Idempotent (a query),
-no non-idempotency note.
+Function: POST, no method override, path `auth/query` (research §1
+line 37, quoted verbatim — same correction as Auth Payment above).
+Idempotent (a query), no non-idempotency note.
 
 ## FieldCounts guards
 
@@ -132,3 +137,53 @@ Two issues found and fixed before santa-loop:
    `"2006300"`/`"2006400"` for Service Codes 63/64 (responseCode =
    HTTPStatus(3) + ServiceCode(2) + CaseCode(2), per `ParseResponseCode`).
    Fixed by correcting every fixture in both test files.
+
+## santa-loop round 1 findings (both reviewers converged)
+
+Two independent reviewers (`ecc:code-reviewer`, `ecc:go-reviewer`) each
+verified every field against research §5.3/§1/§6 directly rather than
+trusting this doc's prior draft, and both surfaced the same two
+factual errors in this doc's own reasoning — a case of the design
+doc's own citations being wrong, same class as prior phases' research-
+citation slips, except here the doc's error was in its own inference,
+not in quoting research:
+
+1. **MEDIUM — invented endpoint paths.** This doc's first draft
+   claimed `debit/auth-payment` / `debit/auth-payment-status` were
+   used because "the exact path is not spelled out verbatim in
+   research" and inferred them from a (nonexistent) `debit/`-prefix
+   convention. Both false: research §1's path column gives `auth/payment`
+   (63, line 36) and `auth/query` (64, line 37) verbatim, and the
+   `debit/` prefix belongs to the Direct Debit and Direct Debit
+   BI-FAST sub-groups specifically — Auth Payment's own sub-group
+   prefix is `auth/`, CPM's is `qr/`. Fixed: both doc comments and all
+   test-server endpoint paths now use the verbatim research paths.
+2. **MEDIUM — `AuthPaymentQueryResponse.Amount` modeled Mandatory
+   against an explicit Optional marker.** Research §5.3 marks Payment
+   Query's response `amount O (members M)` — an explicit Optional
+   container marker, the exact case research §6 item 7 already
+   resolves as `*Money` regardless of member markers. This doc's first
+   draft claimed "container M per research" for this field, which
+   research does not state. Fixed: `AuthPaymentQueryResponse.Amount`
+   is now `*Money` (pointer, `omitempty`), consistent with every other
+   Optional-container response in the package
+   (`TransactionStatusInquiryBankResponse.Amount`,
+   `CPMQueryPaymentResponse.Amount`, etc.); the zero-value test was
+   corrected to expect `amount` absent, not `{"value":"","currency":""}`.
+
+Both reviewers separately confirmed `AuthPaymentResponse.Amount`
+(Auth Payment 63's own response) is *not* the same case: research
+gives that container no marker at all (neither O nor M), only its
+members are marked M, identical to the request side's own unmarked
+container — so the plain-`Money` choice there is a defensible judgment
+call specific to a just-succeeded hold response, not a research
+citation error. This doc's comments were corrected to stop claiming a
+container-level M marker that research does not give, while keeping
+the modeling choice itself (reviewers explicitly did not flag it as
+wrong, only the justification as inaccurate).
+
+Both reviewers independently confirmed the GET/POST resolution and the
+casing-contradiction resolution as sound after re-verifying the
+underlying reasoning themselves (not just re-reading this doc). Both
+MEDIUM findings above are fixed; a fresh round 2 of both reviewers runs
+on the corrected diff per the established santa-loop process.

@@ -181,7 +181,7 @@ func TestAuthPayment_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment"
+	hb.EndpointURL = server.URL + "/v1.0/auth/payment"
 	tr := &Transport{}
 	resp, err := AuthPayment(context.Background(), tr, hb, AuthPaymentRequest{
 		PartnerReferenceNo: "partner-ref-1",
@@ -223,7 +223,7 @@ func TestAuthPayment_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment"
+	hb.EndpointURL = server.URL + "/v1.0/auth/payment"
 	tr := &Transport{}
 	req := AuthPaymentRequest{
 		PartnerReferenceNo: "partner-ref-1",
@@ -262,7 +262,7 @@ func TestAuthPayment_NonTwoXXResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment"
+	hb.EndpointURL = server.URL + "/v1.0/auth/payment"
 	tr := &Transport{}
 	_, err := AuthPayment(context.Background(), tr, hb, AuthPaymentRequest{
 		PartnerReferenceNo: "partner-ref-1",
@@ -286,7 +286,7 @@ func TestAuthPayment_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment"
+	hb.EndpointURL = server.URL + "/v1.0/auth/payment"
 	tr := &Transport{}
 	resp, err := AuthPayment(context.Background(), tr, hb, AuthPaymentRequest{
 		PartnerReferenceNo: "partner-ref-1",
@@ -309,7 +309,7 @@ func TestAuthPayment_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := testHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/debit/auth-payment"
+	hb.EndpointURL = server.URL + "/v1.0/auth/payment"
 	tr := &Transport{}
 	resp, err := AuthPayment(context.Background(), tr, hb, AuthPaymentRequest{
 		PartnerReferenceNo: "partner-ref-1",

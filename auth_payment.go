@@ -8,8 +8,8 @@ import (
 )
 
 // AuthPaymentRequest is the request body for API Auth Payment (Service
-// Code 63, path .../{version}/debit/auth-payment). This places a hold
-// on funds; Capture (65) later charges some or all of the held amount,
+// Code 63, path .../{version}/auth/payment). This places a hold on
+// funds; Capture (65) later charges some or all of the held amount,
 // Void (67) releases held-but-uncaptured funds.
 //
 // Items is documented as a list of purchased goods with no full
@@ -34,9 +34,15 @@ type AuthPaymentRequest struct {
 }
 
 // AuthPaymentResponse is the response body for API Auth Payment.
-// ReferenceNo is Conditional (success only). Amount is Mandatory here
-// (both value and currency members), unlike the request side's
-// unmarked container.
+// ReferenceNo is Conditional (success only). Research leaves the
+// Amount container unmarked here, same as the request side, but marks
+// both its value/currency members Mandatory; Amount is modeled as a
+// plain (non-pointer) Money — unlike the request side's *Money — since
+// this is the success response for a hold that was just placed, and an
+// amount is expected to always be present on it. This is a narrower
+// judgment call than the Optional-container-marked cases elsewhere in
+// the package (compare AuthPaymentQueryResponse.Amount, which research
+// explicitly marks amount O and which is modeled as *Money).
 type AuthPaymentResponse struct {
 	ResponseCode       string          `json:"responseCode"`
 	ResponseMessage    string          `json:"responseMessage"`

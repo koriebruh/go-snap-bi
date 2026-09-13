@@ -8,8 +8,8 @@ import (
 )
 
 // AuthPaymentQueryRequest is the request body for API Payment Query
-// (Service Code 64, path .../{version}/debit/auth-payment-status). No
-// field is Mandatory.
+// (Service Code 64, path .../{version}/auth/query). No field is
+// Mandatory.
 type AuthPaymentQueryRequest struct {
 	OriginalPartnerReferenceNo string          `json:"originalPartnerReferenceNo,omitempty"`
 	OriginalReferenceNo        string          `json:"originalReferenceNo,omitempty"`
@@ -20,7 +20,11 @@ type AuthPaymentQueryRequest struct {
 }
 
 // AuthPaymentQueryResponse is the response body for API Payment Query.
-// Amount, PaidTime, and LatestTransactionStatus are Mandatory.
+// PaidTime and LatestTransactionStatus are Mandatory. Amount is
+// modeled as *Money since research explicitly marks the container
+// Optional (amount O, members M) — the package's established rule for
+// an Optional container is *Money regardless of its members' own
+// markers (see e.g. TransactionStatusInquiryBankResponse.Amount).
 //
 // The worked response example in research key-cases
 // originalpartnerReferenceNo (lowercase p) against the field table's
@@ -35,7 +39,7 @@ type AuthPaymentQueryResponse struct {
 	ResponseMessage            string          `json:"responseMessage"`
 	OriginalPartnerReferenceNo string          `json:"originalPartnerReferenceNo,omitempty"`
 	OriginalReferenceNo        string          `json:"originalReferenceNo,omitempty"`
-	Amount                     Money           `json:"amount"`
+	Amount                     *Money          `json:"amount,omitempty"`
 	PaidTime                   string          `json:"paidTime"`
 	LatestTransactionStatus    string          `json:"latestTransactionStatus"`
 	TransactionStatusDesc      string          `json:"transactionStatusDesc,omitempty"`
