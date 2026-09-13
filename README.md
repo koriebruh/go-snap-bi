@@ -108,7 +108,7 @@ trusting its body.
 
 ## Requirements
 
-- Go 1.26.5 or later (see [`go.mod`](./go.mod)).
+- Go 1.21 or later (see [`go.mod`](./go.mod)).
 
 ## Contributing
 

@@ -166,6 +166,14 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.BaseURL+path, bytes.NewReader(body))
 	if err != nil {
+		// http.NewRequestWithContext's error comes straight from
+		// url.Parse(m.BaseURL+path) and is itself a *url.Error whose
+		// Error() string reprints the URL verbatim — same defense as the
+		// client.Do error path below.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			return accessTokenResponse{}, fmt.Errorf("snap: token manager: build request: %w", urlErr.Err)
+		}
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: build request: %w", err)
 	}
 	for k, v := range headers {

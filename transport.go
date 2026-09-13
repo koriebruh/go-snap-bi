@@ -64,6 +64,14 @@ func (t *Transport) Do(ctx context.Context, hb HeaderBuilder) (Envelope, error) 
 
 	req, err := http.NewRequestWithContext(ctx, hb.Method, hb.EndpointURL, bytes.NewReader(hb.Body))
 	if err != nil {
+		// http.NewRequestWithContext's error comes straight from
+		// url.Parse(hb.EndpointURL) and is itself a *url.Error whose
+		// Error() string reprints the URL verbatim — same PII/signature
+		// leak risk as the client.Do error path below, so unwrap it too.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			return Envelope{}, fmt.Errorf("snap: transport: build request: %w", urlErr.Err)
+		}
 		return Envelope{}, fmt.Errorf("snap: transport: build request: %w", err)
 	}
 	for k, v := range headers {
@@ -129,9 +137,12 @@ func (t *Transport) Do(ctx context.Context, hb HeaderBuilder) (Envelope, error) 
 // this package's signed X-SIGNATURE, X-CLIENT-KEY, and X-PARTNER-ID —
 // and, for a 307/308, the full request body, to whatever host the
 // server names. Returning http.ErrUseLastResponse makes the client
-// return the first response as-is rather than following it, so a
-// caller sees the redirect status code instead of it being silently
-// chased.
+// return the first (redirect) response as-is instead of chasing it, so
+// Do treats it like any other non-2xx status: the numeric status code
+// still reaches the caller, but folded into the returned error (via
+// sentinelForHTTPStatus and the "http status %d" text in the decode-failure
+// path below, since a redirect response's body is rarely valid SNAP
+// JSON) rather than surfaced through a successfully-returned Envelope.
 func neverFollowRedirect(*http.Request, []*http.Request) error {
 	return http.ErrUseLastResponse
 }

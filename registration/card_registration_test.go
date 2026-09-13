@@ -247,12 +247,10 @@ func TestCardRegistration_InvalidCardDataFailsEncode(t *testing.T) {
 }
 
 // TestCardRegistration_MandatoryFieldsAlwaysSerialized pins that
-// BankCardNo and CustIDMerchant — two of the three request fields
-// without omitempty — are always present on the wire, even as "",
-// mirroring TestAccountBinding_MerchantIDAlwaysSerialized/
-// TestAccountUnbinding_MerchantIDAlwaysSerialized. CardData, the third
-// Mandatory field, is checked separately (as an explicit JSON null
-// rather than "", since it's a json.RawMessage, not a string).
+// BankCardNo and CustIDMerchant — the two request fields without
+// omitempty — are always present on the wire, even as "", mirroring
+// TestAccountBinding_MerchantIDAlwaysSerialized/
+// TestAccountUnbinding_MerchantIDAlwaysSerialized.
 func TestCardRegistration_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 	var mu sync.Mutex
 	var gotBody []byte
@@ -291,11 +289,6 @@ func TestCardRegistration_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 		if v != "" {
 			t.Errorf(`wire body[%q] = %v, want ""`, key, v)
 		}
-	}
-	if v, ok := got["cardData"]; !ok {
-		t.Error(`wire body missing "cardData" key; want it always present, even as null`)
-	} else if v != nil {
-		t.Errorf(`wire body["cardData"] = %v, want null`, v)
 	}
 }
 

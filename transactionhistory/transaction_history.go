@@ -9,11 +9,16 @@ import (
 	snap "github.com/koriebruh/go-snap-bi"
 )
 
-// SourceOfFund describes one source of funds used for a transaction, per
-// the standard's "Definisi Tipe" reference.
+// SourceOfFund describes one source of funds used for a transaction,
+// per the standard's "Definisi Tipe" reference. Source is Mandatory;
+// Amount's container is Optional (only its own value/currency members
+// are Mandatory), so it's modeled as *snap.Money — corrected from an
+// earlier version that had it as a plain (non-pointer) snap.Money,
+// found by re-checking the dedicated SourceOfFund type-definition
+// table directly rather than leaving it unverified.
 type SourceOfFund struct {
-	Source string     `json:"source"`
-	Amount snap.Money `json:"amount"`
+	Source string      `json:"source"`
+	Amount *snap.Money `json:"amount,omitempty"`
 }
 
 // TransactionDetail is one entry in a TransactionHistoryListResponse's

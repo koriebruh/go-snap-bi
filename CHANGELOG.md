@@ -89,3 +89,27 @@ Registrasi, Informasi Saldo, Riwayat Transaksi, Transfer Kredit, and
 Transfer Debit are fully implemented (79 endpoints total across the
 five); Keamanan's transactional endpoints live in the root package's
 `token.go`; Administrasi has no endpoints to implement.
+
+## Breaking changes (pre-tag)
+
+A pre-publish audit found several `Money`-typed response fields
+modeled as plain (non-pointer) `snap.Money` where the portal's field
+table marks the container itself Optional (only its nested
+`value`/`currency` members are Mandatory) — this package's convention
+is that an Optional container is a pointer type so a caller can tell
+"absent" from "present but zero-valued". All of the following changed
+from `snap.Money` to `*snap.Money` (with `omitempty` added), before
+the first tagged release, so no `go.mod` version bump was needed:
+
+- `balanceinfo.AccountInfo`: `Amount`, `FloatAmount`, `HoldAmount`,
+  `AvailableBalance`, `LedgerBalance`, `CurrentMultilateralLimit` (6
+  fields; the type's other 3 fields also gained `omitempty`).
+- `transactionhistory.TransactionDetail.Amount`.
+- `transactionhistory.TransactionHistoryDetailResponse.Amount`,
+  `RefundAmount`.
+- `transactionhistory.BankStatementDetail.Amount`, `OriginAmount`.
+- `transactionhistory.SourceOfFund.Amount` (shared by the two
+  Transaction History types above).
+
+See `docs/research/2026-09-13-registrasi-informasi-saldo-riwayat-transaksi-portal-research.md`
+for the per-field portal verification behind each change.

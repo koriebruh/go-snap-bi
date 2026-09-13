@@ -9,6 +9,15 @@ import (
 
 // KeyStore is caller-implemented — key/secret storage is an application
 // concern (DB, vault, etc.), not something this package should own.
+//
+// For an unrecognized clientKey, an implementation must return a non-nil
+// error (its own sentinel, or any distinct error — this package doesn't
+// require a specific one) rather than a zero-value crypto.PublicKey/""
+// with a nil error: this package's callers treat a nil error as "the
+// lookup succeeded," so a zero-value-with-nil-error response for an
+// unknown key is indistinguishable from a misconfigured store and can
+// surface as a confusing ErrSignatureMismatch/ErrEmptyClientSecret
+// instead of a clear "unknown client" failure.
 type KeyStore interface {
 	PublicKey(clientKey string) (crypto.PublicKey, error)
 	ClientSecret(clientKey string) (string, error)
@@ -50,9 +59,11 @@ type IncomingRequest struct {
 // This is deliberately NOT returned for a KeyStore/config mistake — an
 // empty ClientSecret (see ErrEmptyClientSecret) or an unusable RSA key
 // (ErrNotRSASigner, ErrWeakRSAKey, both from signing.go) are distinct,
-// separately errors.Is-matchable failures, so an operator paging on
-// ErrSignatureMismatch alone is not woken for what is actually a
-// configuration bug rather than a tampered or forged request.
+// separately errors.Is-matchable failures. This lets a caller who wants
+// to distinguish the two cases (e.g. alerting differently on a
+// tampered/forged request than on its own configuration bug) do so via
+// errors.Is against the specific sentinel — this package does not
+// itself decide what a caller's monitoring or alerting should key on.
 var ErrSignatureMismatch = errors.New("snap: signature mismatch")
 
 // ErrEmptyClientSecret is returned when a KeyStore's ClientSecret lookup
@@ -123,14 +134,14 @@ func (v *ServerVerifier) checkFreshness(timestamp string) error {
 	}
 	parsed, err := time.Parse(v.profile().TimestampLayout(), timestamp)
 	if err != nil {
-		return fmt.Errorf("snap: verify: parse timestamp %s: invalid format", TruncateForError(timestamp))
+		return fmt.Errorf("snap: verify: parse timestamp %q: invalid format", TruncateForError(timestamp))
 	}
 	skew := v.now().Sub(parsed)
 	if skew < 0 {
 		skew = -skew
 	}
 	if skew > window {
-		return fmt.Errorf("snap: verify: timestamp %s outside freshness window %s", TruncateForError(timestamp), window)
+		return fmt.Errorf("snap: verify: timestamp %q outside freshness window %s", TruncateForError(timestamp), window)
 	}
 	return nil
 }
