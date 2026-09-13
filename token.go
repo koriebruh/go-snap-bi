@@ -132,7 +132,7 @@ func envelopeError(responseCode string) error {
 		// caller already wraps this with its own "snap: <subsystem>: %w" —
 		// adding one here would double it up. Wrapped with ErrUnmappedResponseCode
 		// so a malformed code is still errors.Is-matchable to *something*
-		// on the 2xx path (checkResponseStatus's non-2xx path additionally
+		// on the 2xx path (CheckResponseStatus's non-2xx path additionally
 		// joins the transport-status sentinel on top of this).
 		return fmt.Errorf("%w: response carries malformed response code: %w", ErrUnmappedResponseCode, err)
 	}
@@ -178,8 +178,8 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 		}
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: decode response body: %w", err)
 	}
-	if err := checkResponseStatus(parsed.ResponseCode, resp.StatusCode); err != nil {
-		// checkResponseStatus is authoritative on the transport status: a
+	if err := CheckResponseStatus(parsed.ResponseCode, resp.StatusCode); err != nil {
+		// CheckResponseStatus is authoritative on the transport status: a
 		// non-2xx HTTP status is never treated as success, even if the body
 		// claims a 2xx-class responseCode.
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w", err)
