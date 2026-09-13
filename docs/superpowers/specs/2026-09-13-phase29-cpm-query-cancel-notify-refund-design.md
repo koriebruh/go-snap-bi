@@ -79,8 +79,11 @@ direction and response shape only, not the request shape:
 `QRMPMPaymentNotificationRequest`'s own Mandatory field is
 `OriginalReferenceNo`, not `MerchantID`, and it lacks several fields
 this endpoint's request has (`merchantId`, `subMerchantId`,
-`externalStoreId`, `transactionStatusDesc`, `additionalInfo`) — the two
-requests are not identical, only the notification pattern (struct-only,
+`transactionStatusDesc`, `additionalInfo`) — it does have
+`ExternalStoreID` too, verified directly against
+`mpm_qr_payment_notification.go:30`, so that one is not a difference.
+The two requests are still not identical overall, only the
+notification pattern (struct-only,
 inbound, envelope-only response) is shared. Struct-only per the
 package's established convention for "Notify"-named/settlement-
 callback-shaped endpoints.
