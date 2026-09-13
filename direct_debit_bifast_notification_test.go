@@ -58,8 +58,21 @@ func TestDirectDebitBIFASTNotificationRequest_RoundTrips(t *testing.T) {
 	if err := json.Unmarshal(b, &wire); err != nil {
 		t.Fatalf("decode marshaled request: %v", err)
 	}
-	if wire["originalReferenceNo"] != "ref-1" || wire["transactionStatus"] != "00" {
-		t.Errorf("marshaled request = %v, want originalReferenceNo/transactionStatus present", wire)
+	wantWire := map[string]any{
+		"originalReferenceNo":        "ref-1",
+		"originalPartnerReferenceNo": "partner-ref-1",
+		"originalExternalId":         "ext-1",
+		"transactionStatus":          "00",
+		"transactionStatusDesc":      "Success",
+		"eMandateReffId":             "EMANDATE001",
+		"sourceAccountNo":            "1234567890123456789012345678901234",
+		"sourceAccountName":          "Jane Doe",
+		"amount":                     map[string]any{"value": "50000.00", "currency": "IDR"},
+		"traceNo":                    "TRACE001",
+		"additionalInfo":             map[string]any{"note": "req-value"},
+	}
+	if !reflect.DeepEqual(wire, wantWire) {
+		t.Errorf("marshaled request = %v, want %v", wire, wantWire)
 	}
 }
 
