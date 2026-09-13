@@ -70,12 +70,16 @@
 //     Direct Debit BI-FAST; only Auth Payment remains to complete
 //     Transfer Debit)
 //     (docs/superpowers/specs/2026-09-13-phase30-direct-debit-bifast-design.md)
+//   - AuthPayment, AuthPaymentQuery (Auth Payment sub-group, part 1 of 3)
+//     (docs/superpowers/specs/2026-09-13-phase31-auth-payment-query-design.md)
 //
 // All of Transfer Kredit is now implemented. Transfer Debit (4
-// sub-groups: Direct Debit, CPM, Auth Payment, Direct Debit BI-FAST,
-// 21 endpoints total, per
+// sub-groups: Direct Debit, CPM, Direct Debit BI-FAST, and Auth
+// Payment, 21 endpoints total, per
 // docs/research/2026-09-12-transfer-debit-portal-research.md) is in
-// progress, starting with Direct Debit above. The remainder of SNAP's
+// progress: Direct Debit, CPM, and Direct Debit BI-FAST are complete;
+// Auth Payment (the last sub-group) is underway above. The remainder
+// of SNAP's
 // ~14 service groups (including Registrasi, Informasi Saldo, Riwayat
 // Transaksi) beyond Transfer Kredit and Transfer Debit remains
 // unresearched. See
