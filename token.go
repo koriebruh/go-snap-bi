@@ -192,7 +192,7 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 		}
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
@@ -355,7 +355,7 @@ func (m *TokenManager) AccessTokenB2B2C(ctx context.Context, grantType GrantType
 	default:
 		return Token{}, fmt.Errorf("snap: access token b2b2c: unsupported grant type %q", grantType)
 	}
-	body, err := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody) // #nosec G117 -- refreshToken is a mandatory SNAP wire field here, not a leaked secret
 	if err != nil {
 		return Token{}, fmt.Errorf("snap: access token b2b2c: encode request body: %w", err)
 	}

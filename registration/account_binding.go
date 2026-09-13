@@ -95,7 +95,7 @@ type AccountBindingResponse struct {
 // a fresh X-EXTERNAL-ID on retry risks a duplicate binding or a second
 // token issuance.
 func AccountBinding(ctx context.Context, t *snap.Transport, hb snap.HeaderBuilder, req AccountBindingRequest) (AccountBindingResponse, error) {
-	body, err := json.Marshal(req)
+	body, err := json.Marshal(req) // #nosec G117 -- refreshToken is a mandatory SNAP wire field here, not a leaked secret
 	if err != nil {
 		return AccountBindingResponse{}, fmt.Errorf("snap: account binding: encode request: %w", err)
 	}

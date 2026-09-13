@@ -1,0 +1,20 @@
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "*.go"
+      run: |
+        out="$(gofmt -l {staged_files})"
+        if [ -n "$out" ]; then
+          echo "gofmt would reformat:"
+          echo "$out"
+          exit 1
+        fi
+    govet:
+      glob: "*.go"
+      run: go vet ./...
+
+pre-push:
+  commands:
+    test:
+      run: go test ./... -count=1 -race

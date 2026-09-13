@@ -97,7 +97,7 @@ func (t *Transport) Do(ctx context.Context, hb HeaderBuilder) (Envelope, error) 
 		}
 		return Envelope{}, fmt.Errorf("snap: transport: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {

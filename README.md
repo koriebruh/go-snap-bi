@@ -11,7 +11,7 @@ covering every API Service category published on the
 go get github.com/koriebruh/go-snap-bi
 ```
 
-<img src="./docs/Mascot.jpg" alt="go-snap-bi mascot" width="240">
+<img src="./docs/Mascot.jpg" alt="go-snap-bi mascot">
 
 ## Status
 
@@ -115,6 +115,12 @@ trusting its body.
 - Go 1.21 or later (see [`go.mod`](./go.mod)).
 
 ## Contributing
+
+This repo uses [lefthook](https://github.com/evilmartians/lefthook) for
+local git hooks (`lefthook install` after cloning): `gofmt`/`go vet` on
+commit, `go test -race` on push. CI (`.github/workflows/ci.yml`) runs
+the same checks plus `golangci-lint`, `govulncheck`, and `gosec` on
+every push and pull request.
 
 Endpoint bindings are added one Service Code at a time, each following
 the conventions documented in `doc.go` and the per-phase design notes
