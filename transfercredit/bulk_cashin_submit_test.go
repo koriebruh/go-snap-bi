@@ -30,7 +30,7 @@ func TestSubmitBulkCashIn_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/submit-bulk-cash-in"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/bulk-cashin-payment"
 	tr := &snap.Transport{}
 	resp, err := SubmitBulkCashIn(context.Background(), tr, hb, SubmitBulkCashInRequest{
 		TransactionDate: "2020-12-20T10:00:00+07:00",
@@ -67,7 +67,7 @@ func TestSubmitBulkCashIn_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/submit-bulk-cash-in"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/bulk-cashin-payment"
 	tr := &snap.Transport{}
 	req := SubmitBulkCashInRequest{
 		PartnerBulkID:   "partner-bulk-1",
@@ -142,7 +142,7 @@ func TestSubmitBulkCashIn_MandatoryFieldAlwaysSerialized(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/submit-bulk-cash-in"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/bulk-cashin-payment"
 	tr := &snap.Transport{}
 	if _, err := SubmitBulkCashIn(context.Background(), tr, hb, SubmitBulkCashInRequest{}); err != nil {
 		t.Fatalf("SubmitBulkCashIn() error = %v", err)
@@ -201,7 +201,7 @@ func TestSubmitBulkCashIn_MalformedAdditionalInfoIsMarshalError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/submit-bulk-cash-in"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/bulk-cashin-payment"
 	tr := &snap.Transport{}
 	_, err := SubmitBulkCashIn(context.Background(), tr, hb, SubmitBulkCashInRequest{
 		AdditionalInfo: json.RawMessage(`{`),
@@ -223,7 +223,7 @@ func TestSubmitBulkCashIn_NonTwoXXResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/submit-bulk-cash-in"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/bulk-cashin-payment"
 	tr := &snap.Transport{}
 	_, err := SubmitBulkCashIn(context.Background(), tr, hb, SubmitBulkCashInRequest{})
 	if err == nil {
@@ -243,7 +243,7 @@ func TestSubmitBulkCashIn_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/submit-bulk-cash-in"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/bulk-cashin-payment"
 	tr := &snap.Transport{}
 	resp, err := SubmitBulkCashIn(context.Background(), tr, hb, SubmitBulkCashInRequest{})
 	if err == nil {
@@ -262,7 +262,7 @@ func TestSubmitBulkCashIn_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/submit-bulk-cash-in"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/bulk-cashin-payment"
 	tr := &snap.Transport{}
 	resp, err := SubmitBulkCashIn(context.Background(), tr, hb, SubmitBulkCashInRequest{})
 	if err == nil {

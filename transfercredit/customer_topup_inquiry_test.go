@@ -38,7 +38,7 @@ func TestAccountInquiryCustomerTopUp_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/account-inquiry-customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/account-inquiry"
 	tr := &snap.Transport{}
 	resp, err := AccountInquiryCustomerTopUp(context.Background(), tr, hb, AccountInquiryCustomerTopUpRequest{
 		Amount: snap.Money{Value: "100000.00", Currency: "IDR"},
@@ -91,7 +91,7 @@ func TestAccountInquiryCustomerTopUp_CustomerMonthlyInLimitAcceptsEitherWireShap
 			defer server.Close()
 
 			hb := snaptest.TestHeaderBuilder(server.URL)
-			hb.EndpointURL = server.URL + "/v1.0/account-inquiry-customer-top-up"
+			hb.EndpointURL = server.URL + "/v1.0/emoney/account-inquiry"
 			tr := &snap.Transport{}
 			resp, err := AccountInquiryCustomerTopUp(context.Background(), tr, hb, AccountInquiryCustomerTopUpRequest{})
 			if err != nil {
@@ -121,7 +121,7 @@ func TestAccountInquiryCustomerTopUp_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/account-inquiry-customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/account-inquiry"
 	tr := &snap.Transport{}
 	req := AccountInquiryCustomerTopUpRequest{
 		PartnerReferenceNo: "partner-ref-1",
@@ -168,7 +168,7 @@ func TestAccountInquiryCustomerTopUp_MandatoryFieldAlwaysSerialized(t *testing.T
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/account-inquiry-customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/account-inquiry"
 	tr := &snap.Transport{}
 	if _, err := AccountInquiryCustomerTopUp(context.Background(), tr, hb, AccountInquiryCustomerTopUpRequest{}); err != nil {
 		t.Fatalf("AccountInquiryCustomerTopUp() error = %v", err)
@@ -197,7 +197,7 @@ func TestAccountInquiryCustomerTopUp_NonTwoXXResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/account-inquiry-customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/account-inquiry"
 	tr := &snap.Transport{}
 	_, err := AccountInquiryCustomerTopUp(context.Background(), tr, hb, AccountInquiryCustomerTopUpRequest{})
 	if err == nil {
@@ -217,7 +217,7 @@ func TestAccountInquiryCustomerTopUp_NonTwoXXStatusWithTwoXXBodyIsError(t *testi
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/account-inquiry-customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/account-inquiry"
 	tr := &snap.Transport{}
 	resp, err := AccountInquiryCustomerTopUp(context.Background(), tr, hb, AccountInquiryCustomerTopUpRequest{})
 	if err == nil {
@@ -236,7 +236,7 @@ func TestAccountInquiryCustomerTopUp_TwoXXStatusWithNoResponseCodeIsError(t *tes
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/account-inquiry-customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/account-inquiry"
 	tr := &snap.Transport{}
 	resp, err := AccountInquiryCustomerTopUp(context.Background(), tr, hb, AccountInquiryCustomerTopUpRequest{})
 	if err == nil {

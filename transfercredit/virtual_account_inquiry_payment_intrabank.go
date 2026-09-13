@@ -56,11 +56,13 @@ type VAInquiryPaymentIntrabankResponse struct {
 
 // VAInquiryPaymentIntrabank calls the SNAP VA - Inquiry Payment
 // Intrabank endpoint (Service Code 32, path
-// .../{version}/transfer-va/inquiry-payment-intrabank, HTTP POST — no
-// method override). hb must already carry every field snap.HeaderBuilder
-// needs except Body, which VAInquiryPaymentIntrabank sets itself so
-// the exact marshaled bytes are used for both signing and the wire
-// body.
+// .../{version}/transfer-va/inquiry-intrabank, HTTP POST — no method
+// override; the path was previously misstated here as
+// transfer-va/inquiry-payment-intrabank with no recorded justification
+// — corrected against research §1's own path table). hb must already
+// carry every field snap.HeaderBuilder needs except Body, which
+// VAInquiryPaymentIntrabank sets itself so the exact marshaled bytes
+// are used for both signing and the wire body.
 func VAInquiryPaymentIntrabank(ctx context.Context, t *snap.Transport, hb snap.HeaderBuilder, req VAInquiryPaymentIntrabankRequest) (VAInquiryPaymentIntrabankResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {

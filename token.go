@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -43,12 +44,26 @@ const tokenSafetyMargin = 30 * time.Second
 // requests are always asymmetric-signed, both B2B and B2B2C, regardless of
 // the signing mode agreed for transaction requests.
 type TokenManager struct {
-	BaseURL    string
-	ClientKey  string
-	Signer     crypto.Signer
+	BaseURL   string
+	ClientKey string
+	Signer    crypto.Signer
+	// HTTPClient is optional; nil means a client with defaultHTTPTimeout
+	// and a CheckRedirect policy that never follows a redirect (see
+	// Transport.HTTPClient's doc comment for why: a redirect on an
+	// access-token request would carry X-SIGNATURE and X-CLIENT-KEY to
+	// whatever host it names). A caller-supplied HTTPClient must set an
+	// equivalent policy itself.
 	HTTPClient *http.Client
 	Profile    Profile
 	Now        func() time.Time // optional; nil means time.Now
+
+	// BaseURL, ClientKey, Signer, and Profile must not be mutated after
+	// the first call to AccessTokenB2B/AccessTokenB2B2C: a concurrent
+	// runB2BFetch reads them without holding mu, and the token cache is
+	// keyed on nothing but this TokenManager itself, so swapping
+	// credentials on a live instance can serve a cached token issued
+	// under the old identity to a caller expecting the new one. Use a
+	// separate TokenManager per credential set instead.
 
 	mu          sync.Mutex
 	cachedToken string
@@ -85,7 +100,7 @@ func (m *TokenManager) httpClient() *http.Client {
 	if m.HTTPClient != nil {
 		return m.HTTPClient
 	}
-	return &http.Client{Timeout: defaultHTTPTimeout}
+	return &http.Client{Timeout: defaultHTTPTimeout, CheckRedirect: neverFollowRedirect}
 }
 
 // accessTokenHeaders builds the smaller header set used by access-token
@@ -159,6 +174,14 @@ func (m *TokenManager) doAccessTokenRequest(ctx context.Context, path string, bo
 
 	resp, err := m.httpClient().Do(req)
 	if err != nil {
+		// Unwrap *url.Error before wrapping: its Error() string reprints
+		// the request URL verbatim. m.BaseURL+path never carries a query
+		// string today, but this matches Transport.Do's same defense
+		// rather than relying on that staying true.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w", urlErr.Err)
+		}
 		return accessTokenResponse{}, fmt.Errorf("snap: token manager: %w", err)
 	}
 	defer resp.Body.Close()

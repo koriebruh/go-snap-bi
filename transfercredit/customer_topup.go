@@ -45,8 +45,10 @@ type CustomerTopUpResponse struct {
 }
 
 // CustomerTopUp calls the SNAP Customer Top Up endpoint (Service Code
-// 38, path .../{version}/customer-top-up, HTTP POST — no method
-// override). hb must already carry every field snap.HeaderBuilder needs
+// 38, path .../{version}/emoney/topup — the path was previously
+// misstated here as customer-top-up with no recorded justification,
+// corrected against research §1's own path table, HTTP POST — no
+// method override). hb must already carry every field snap.HeaderBuilder needs
 // except Body, which CustomerTopUp sets itself so the exact marshaled
 // bytes are used for both signing and the wire body.
 //

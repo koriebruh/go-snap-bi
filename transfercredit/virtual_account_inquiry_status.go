@@ -70,8 +70,10 @@ type VAInquiryStatusResponse struct {
 }
 
 // VAInquiryStatus calls the SNAP VA - VA Inquiry Status endpoint
-// (Service Code 26, path .../{version}/transfer-va/inquiry-status,
-// HTTP POST — no method override). hb must already carry every field
+// (Service Code 26, path .../{version}/transfer-va/status, HTTP POST —
+// no method override; the path was previously misstated here as
+// transfer-va/inquiry-status with no recorded justification — corrected
+// against research §1's own path table). hb must already carry every field
 // snap.HeaderBuilder needs except Body, which VAInquiryStatus sets itself so
 // the exact marshaled bytes are used for both signing and the wire
 // body.

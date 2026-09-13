@@ -124,15 +124,15 @@ func TestVAIntrabankReportResponses_UseLowercaseDVirtualAccountdataTag(t *testin
 		}
 	}
 
-	f, ok := reflect.TypeOf(GetReportResponse{}).FieldByName("VirtualAccountData")
+	f, ok := reflect.TypeOf(VAGetReportResponse{}).FieldByName("VirtualAccountData")
 	if !ok {
-		t.Fatal("GetReportResponse has no VirtualAccountData field")
+		t.Fatal("VAGetReportResponse has no VirtualAccountData field")
 	}
 	if got := string(f.Tag); got != wantSingle {
-		t.Errorf("GetReportResponse.VirtualAccountData tag = %s, want %s", got, wantSingle)
+		t.Errorf("VAGetReportResponse.VirtualAccountData tag = %s, want %s", got, wantSingle)
 	}
 	if f.Type.Kind() != reflect.Slice {
-		t.Errorf("GetReportResponse.VirtualAccountData type = %s, want a slice (the only array-typed VA response in the package)", f.Type)
+		t.Errorf("VAGetReportResponse.VirtualAccountData type = %s, want a slice (the only array-typed VA response in the package)", f.Type)
 	}
 }
 

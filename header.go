@@ -44,6 +44,12 @@ type HeaderBuilder struct {
 // BuildStringToSignTransaction and SignSymmetric/SignAsymmetric per the
 // Symmetric flag.
 func (b HeaderBuilder) Build() (http.Header, error) {
+	if b.Method == "" {
+		return nil, errors.New("snap: build headers: Method is required")
+	}
+	if b.AccessToken == "" {
+		return nil, errors.New("snap: build headers: AccessToken is required")
+	}
 	if b.ExternalID == "" {
 		return nil, errors.New("snap: build headers: ExternalID is required")
 	}

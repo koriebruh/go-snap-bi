@@ -97,7 +97,7 @@ type CardRegistrationInquiryResponse struct {
 // Path.
 func CardRegistrationInquiry(ctx context.Context, t *snap.Transport, hb snap.HeaderBuilder, custIDMerchant string) (CardRegistrationInquiryResponse, error) {
 	if !custIDMerchantPattern.MatchString(custIDMerchant) {
-		return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid custIdMerchant %q", custIDMerchant)
+		return CardRegistrationInquiryResponse{}, fmt.Errorf("snap: card registration inquiry: invalid custIdMerchant %q", snap.TruncateForError(custIDMerchant))
 	}
 
 	u, perr := url.Parse(hb.EndpointURL)

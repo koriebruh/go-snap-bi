@@ -34,7 +34,7 @@ func TestCustomerTopUp_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/topup"
 	tr := &snap.Transport{}
 	resp, err := CustomerTopUp(context.Background(), tr, hb, CustomerTopUpRequest{
 		PartnerReferenceNo: "partner-ref-1",
@@ -75,7 +75,7 @@ func TestCustomerTopUp_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/topup"
 	tr := &snap.Transport{}
 	req := CustomerTopUpRequest{
 		PartnerReferenceNo: "partner-ref-1",
@@ -121,7 +121,7 @@ func TestCustomerTopUp_MandatoryFieldAlwaysSerialized(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/topup"
 	tr := &snap.Transport{}
 	if _, err := CustomerTopUp(context.Background(), tr, hb, CustomerTopUpRequest{}); err != nil {
 		t.Fatalf("CustomerTopUp() error = %v", err)
@@ -155,7 +155,7 @@ func TestCustomerTopUp_MalformedCategoryIDIsMarshalError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/topup"
 	tr := &snap.Transport{}
 	_, err := CustomerTopUp(context.Background(), tr, hb, CustomerTopUpRequest{
 		CategoryID: json.RawMessage(`{`),
@@ -177,7 +177,7 @@ func TestCustomerTopUp_NonTwoXXResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/topup"
 	tr := &snap.Transport{}
 	_, err := CustomerTopUp(context.Background(), tr, hb, CustomerTopUpRequest{})
 	if err == nil {
@@ -197,7 +197,7 @@ func TestCustomerTopUp_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/topup"
 	tr := &snap.Transport{}
 	resp, err := CustomerTopUp(context.Background(), tr, hb, CustomerTopUpRequest{})
 	if err == nil {
@@ -216,7 +216,7 @@ func TestCustomerTopUp_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/customer-top-up"
+	hb.EndpointURL = server.URL + "/v1.0/emoney/topup"
 	tr := &snap.Transport{}
 	resp, err := CustomerTopUp(context.Background(), tr, hb, CustomerTopUpRequest{})
 	if err == nil {

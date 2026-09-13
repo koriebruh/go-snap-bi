@@ -46,9 +46,14 @@ type AuthVoidResponse struct {
 }
 
 // AuthVoid calls the SNAP Void endpoint (Service Code 67, HTTP POST —
-// no method override). hb must already carry every field
-// snap.HeaderBuilder needs except Body, which AuthVoid sets itself so the
-// exact marshaled bytes are used for both signing and the wire body.
+// no method override; research's Overview tab marks this GET, but
+// every worked example across all 7 Auth Payment endpoints is
+// POST-shaped with a mandatory JSON body, and this package's signing
+// path has no representation for a body-carrying GET — see
+// AuthPayment's doc comment for the full reasoning). hb must already
+// carry every field snap.HeaderBuilder needs except Body, which AuthVoid
+// sets itself so the exact marshaled bytes are used for both signing
+// and the wire body.
 //
 // This operation is not idempotent and this package does not retry.
 // Callers that retry a failed or timed-out call should reuse the same

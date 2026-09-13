@@ -41,7 +41,7 @@ func TestVAInquiryStatus_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-status"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/status"
 	tr := &snap.Transport{}
 	resp, err := VAInquiryStatus(context.Background(), tr, hb, VAInquiryStatusRequest{
 		PartnerServiceID: "12345",
@@ -88,7 +88,7 @@ func TestVAInquiryStatus_CustomerNoAcceptsBareNumber(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-status"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/status"
 	tr := &snap.Transport{}
 	resp, err := VAInquiryStatus(context.Background(), tr, hb, VAInquiryStatusRequest{
 		CustomerNo: json.RawMessage(bareNumber),
@@ -121,7 +121,7 @@ func TestVAInquiryStatus_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-status"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/status"
 	tr := &snap.Transport{}
 	req := VAInquiryStatusRequest{
 		PartnerServiceID: "12345",
@@ -175,7 +175,7 @@ func TestVAInquiryStatus_MandatoryFieldsAlwaysSerialized(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-status"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/status"
 	tr := &snap.Transport{}
 	if _, err := VAInquiryStatus(context.Background(), tr, hb, VAInquiryStatusRequest{}); err != nil {
 		t.Fatalf("VAInquiryStatus() error = %v", err)
@@ -216,7 +216,7 @@ func TestVAInquiryStatus_MalformedCustomerNoIsMarshalError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-status"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/status"
 	tr := &snap.Transport{}
 	_, err := VAInquiryStatus(context.Background(), tr, hb, VAInquiryStatusRequest{
 		CustomerNo: json.RawMessage(`{`),
@@ -238,7 +238,7 @@ func TestVAInquiryStatus_NonTwoXXResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-status"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/status"
 	tr := &snap.Transport{}
 	_, err := VAInquiryStatus(context.Background(), tr, hb, VAInquiryStatusRequest{})
 	if err == nil {
@@ -258,7 +258,7 @@ func TestVAInquiryStatus_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-status"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/status"
 	tr := &snap.Transport{}
 	resp, err := VAInquiryStatus(context.Background(), tr, hb, VAInquiryStatusRequest{})
 	if err == nil {
@@ -277,7 +277,7 @@ func TestVAInquiryStatus_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-status"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/status"
 	tr := &snap.Transport{}
 	resp, err := VAInquiryStatus(context.Background(), tr, hb, VAInquiryStatusRequest{})
 	if err == nil {
