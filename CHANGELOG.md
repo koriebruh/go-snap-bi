@@ -7,6 +7,12 @@ history — every type listed below now lives in one of the subpackages
 (`registration`, `balanceinfo`, `transactionhistory`, `transfercredit`,
 `transferdebit`), not in the root `snap` package.
 
+The `docs/superpowers/specs/*.md` and `docs/research/*.md` paths cited
+per phase below are development notes kept locally only (`docs/` is
+gitignored) — they are not part of the published module tree, so the
+paths won't resolve for anyone who only has this repo's tracked files
+or `go get`s the module.
+
 - BalanceInquiry (docs/superpowers/specs/2026-09-11-phase2-balance-inquiry-design.md)
 - TransactionHistoryList (docs/superpowers/specs/2026-09-11-phase3-transaction-history-design.md)
 - AccountCreation (docs/superpowers/specs/2026-09-11-phase4-account-creation-design.md)

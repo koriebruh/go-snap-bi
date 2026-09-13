@@ -9,7 +9,9 @@
 // authoritative status check (ParseResponseCode, CheckResponseStatus,
 // the Err* sentinels), the request/response transport (Transport,
 // Envelope), and the shared Money amount type — see
-// docs/superpowers/specs/2026-09-10-go-snap-bi-core-design.md.
+// docs/superpowers/specs/2026-09-10-go-snap-bi-core-design.md (a
+// development note kept locally only, not part of this module's
+// published tree — every docs/ reference in this file is the same).
 //
 // # Package layout
 //

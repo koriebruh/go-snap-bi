@@ -45,9 +45,13 @@ type BankStatementEntryTotal struct {
 }
 
 // BankStatementDetailBalanceEntry is one entry in a
-// BankStatementDetailBalance's StartAmount/EndAmount arrays.
+// BankStatementDetailBalance's StartAmount/EndAmount arrays. Amount is
+// an Optional container per the field table ("O"), unlike
+// BankStatementEntryTotal.Amount (also nested one level, but "M"
+// there) — the two are not harmonized, each modeled per its own table
+// row, confirmed by two independent targeted re-fetches.
 type BankStatementDetailBalanceEntry struct {
-	Amount snap.Money `json:"amount"`
+	Amount *snap.Money `json:"amount,omitempty"`
 }
 
 // BankStatementDetailBalance is a BankStatementDetail's detailBalance

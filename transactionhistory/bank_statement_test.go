@@ -137,8 +137,8 @@ func fullBankStatementResponse() BankStatementResponse {
 		DetailData: []BankStatementDetail{
 			{
 				DetailBalance: &BankStatementDetailBalance{
-					StartAmount: []BankStatementDetailBalanceEntry{{Amount: snap.Money{Value: "10000.00", Currency: "IDR"}}},
-					EndAmount:   []BankStatementDetailBalanceEntry{{Amount: snap.Money{Value: "10000.00", Currency: "IDR"}}},
+					StartAmount: []BankStatementDetailBalanceEntry{{Amount: &snap.Money{Value: "10000.00", Currency: "IDR"}}},
+					EndAmount:   []BankStatementDetailBalanceEntry{{Amount: &snap.Money{Value: "10000.00", Currency: "IDR"}}},
 				},
 				Amount:                  &snap.Money{Value: "12345678.00", Currency: "IDR"},
 				OriginAmount:            &snap.Money{Value: "12345678.00", Currency: "IDR"},

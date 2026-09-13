@@ -114,10 +114,12 @@ trusting its body.
 
 Endpoint bindings are added one Service Code at a time, each following
 the conventions documented in `doc.go` and the per-phase design notes
-under [`docs/superpowers/specs/`](./docs/superpowers/specs/). Field
-tables and worked examples are sourced from the ASPI SNAP Developer
-Site; research notes recording the portal's own contradictions and
-ambiguities live under [`docs/research/`](./docs/research/).
+under `docs/superpowers/specs/`. Field tables and worked examples are
+sourced from the ASPI SNAP Developer Site; research notes recording
+the portal's own contradictions and ambiguities live under
+`docs/research/`. Both `docs/` paths are development notes kept
+locally only (gitignored) — not part of this module's published
+tree, so a `go get` of this module or a shallow clone won't have them.
 
 ## Author
 
