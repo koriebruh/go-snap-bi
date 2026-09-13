@@ -12,9 +12,10 @@ import (
 
 // TestHeaderBuilder returns a HeaderBuilder with placeholder credentials
 // pointed at serverURL, for tests that stand up an httptest.Server.
-// Callers must override EndpointURL to the specific path under test —
-// every existing call site already does this, so the placeholder path
-// here is never actually exercised.
+// Most call sites override EndpointURL to the specific path under
+// test; a few (e.g. BalanceInquiry's own tests) don't and get this
+// placeholder path as-is, which is harmless since none of those
+// handlers assert anything about the request path.
 //
 // Moved here from the single per-package copy each endpoint test file
 // used to declare, so transferkredit and transferdebit share one
@@ -22,7 +23,7 @@ import (
 func TestHeaderBuilder(serverURL string) snap.HeaderBuilder {
 	return snap.HeaderBuilder{
 		Method:       http.MethodPost,
-		EndpointURL:  serverURL + "/v1.0/test",
+		EndpointURL:  serverURL + "/v1.0/balance-inquiry",
 		AccessToken:  "access-token-123",
 		ClientKey:    "client-key",
 		PartnerID:    "partner-id",

@@ -2,6 +2,7 @@ package transferdebit
 
 import (
 	"encoding/json"
+
 	snap "github.com/koriebruh/go-snap-bi"
 )
 
