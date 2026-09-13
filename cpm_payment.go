@@ -24,7 +24,9 @@ type CPMPaymentScannerInfo struct {
 // Items is documented as an unstructured "Object" with no item-level
 // field table given anywhere in research — modeled as json.RawMessage,
 // matching the package's existing treatment of genuinely untyped
-// fields (same rationale as AdditionalInfo, not a new convention).
+// fields (same rationale as AdditionalInfo; also already used for
+// AccountBindingRequest.AdditionalData and VerifyOTPResponse.QParams,
+// so this is precedented, not a new convention).
 type CPMPaymentRequest struct {
 	PartnerReferenceNo string                 `json:"partnerReferenceNo"`
 	QRContent          string                 `json:"qrContent"`

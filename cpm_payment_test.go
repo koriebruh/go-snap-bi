@@ -64,6 +64,11 @@ func TestCPMPayment_ParsesResponse(t *testing.T) {
 	}
 }
 
+// Items below is populated with an illustrative array shape as a
+// stand-in payload — research documents the field only as an
+// unstructured "Object" with no worked example, so this is not a
+// spec-derived shape; json.RawMessage round-trips any valid JSON value
+// regardless of shape, which is the point of using it here.
 func TestCPMPayment_RequestBodyRoundTrips(t *testing.T) {
 	var mu sync.Mutex
 	var gotBody []byte

@@ -49,7 +49,9 @@ per the package's Optional-nested-object convention.
 `items` is documented as an unstructured "Object" with no item-level
 field table given anywhere in research — modeled as `json.RawMessage`,
 matching the package's existing treatment of genuinely untyped/opaque
-fields (same rationale as `AdditionalInfo`, not a new convention).
+fields (same rationale as `AdditionalInfo`; also already used for
+`AccountBindingRequest.AdditionalData` and `VerifyOTPResponse.QParams`,
+so this is precedented, not a new convention).
 
 `amount`/`feeAmount`: Optional containers with Mandatory members (same
 pattern research flags elsewhere, e.g. Direct Debit Payment) —
