@@ -14,9 +14,9 @@ import (
 // OriginalCaptureNo is Conditional, "must be filled upon unsuccessful
 // transaction" — the opposite condition-sense from most Conditional
 // fields in this package, which are typically filled on success
-// (research §6 item 3). Recorded here verbatim, not adjusted; this
-// package enforces no field-level business-rule validation, so the
-// direction of the trigger has no code consequence beyond this note.
+// (research §5.3). Recorded here verbatim, not adjusted; this package
+// enforces no field-level business-rule validation, so the direction
+// of the trigger has no code consequence beyond this note.
 type AuthRefundRequest struct {
 	OriginalPartnerReferenceNo string          `json:"originalPartnerReferenceNo"`
 	OriginalReferenceNo        string          `json:"originalReferenceNo,omitempty"`
@@ -39,8 +39,14 @@ type AuthRefundRequest struct {
 // with opposite success/failure triggers from each other:
 // OriginalCaptureNo is filled on an unsuccessful transaction (same
 // condition as the request field of the same name), while
-// OriginalReferenceNo is filled on a successful one — research §6 item
-// 3 records this as a genuine, non-copy-paste distinction.
+// OriginalReferenceNo is filled on a successful one. Research §6 item
+// 3 flags this as not yet independently verified — it reads as a
+// genuine distinction rather than a copy-paste duplicate of the same
+// note, but research itself leaves it open pending confirmation. This
+// package models the wire shape as documented either way (both fields
+// Conditional → omitempty), since it enforces no field-level
+// business-rule validation regardless of which direction the trigger
+// actually runs.
 type AuthRefundResponse struct {
 	ResponseCode               string          `json:"responseCode"`
 	ResponseMessage            string          `json:"responseMessage"`

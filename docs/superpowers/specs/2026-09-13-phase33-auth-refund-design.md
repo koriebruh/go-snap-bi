@@ -16,14 +16,18 @@ item 1). Path taken verbatim from research §1 line 18: `auth/refund`.
 
 `OriginalCaptureNo` is Conditional, "must be filled upon unsuccessful
 transaction" — the opposite condition-sense from most Conditional
-fields in the package (typically filled on success). `OriginalReferenceNo`
-in the response is Conditional the ordinary way, "must be filled upon
+fields in the package (typically filled on success); this is §5.3's
+own field-table note for the request side. `OriginalReferenceNo` in
+the response is Conditional the ordinary way, "must be filled upon
 successful transaction" — so the response's two Conditional identifier
-fields have genuinely opposite success/failure triggers from each
-other, not a copy-paste duplicate of the same note. Research instructs
-recording this verbatim rather than adjusting it, and since this
-package enforces no field-level business-rule validation anywhere
-(only wire-shape/omitempty), there is no code consequence beyond a
+fields read as having genuinely opposite success/failure triggers from
+each other, not a copy-paste duplicate of the same note. Research §6
+item 3 flags this specific response-side pairing as not yet
+independently verified ("needs verification that isn't just a
+documentation slip"), listed under "Open Contradictions to Resolve
+Per-Phase (not resolved in this document)" — so this is recorded as
+research's own open observation, not a settled fact. Either way there
+is no code consequence beyond a
 doc-comment note — both fields are Conditional → `omitempty`
 regardless of which direction their trigger runs.
 
@@ -76,3 +80,29 @@ This phase's bullet marks Auth Payment sub-group complete and, with
 it, all of Transfer Debit (4 sub-groups, 21 endpoints) complete. The
 trailing summary paragraph — stale since Phase 26 per a Phase 30
 santa-loop note — is refreshed to state Transfer Debit is done.
+
+## santa-loop round 1 findings (both reviewers converged)
+
+Both reviewers independently flagged the same LOW issue: the
+`OriginalCaptureNo`/`OriginalReferenceNo` doc comments (in
+`auth_refund.go` and this doc's §6 item 3 section above) cited "§6
+item 3" for the request-side note (actually §5.3's own field-table
+text) and, more substantively, stated the response-side
+opposite-trigger distinction as a settled fact ("records this as a
+genuine, non-copy-paste distinction") when research §6 item 3 itself
+lists it under "Open Contradictions to Resolve Per-Phase (not resolved
+in this document)" and explicitly says it "needs verification that
+isn't just a documentation slip." Fixed: repointed the request-side
+citation to §5.3, and reworded the response-side comment in both
+`auth_refund.go` and this doc to present the distinction as research's
+own open observation pending verification, not a resolved fact. Zero
+code consequence either way — both fields remain Conditional →
+`omitempty` regardless of which direction the trigger actually runs,
+since this package validates wire shape only, never business rules.
+
+Both reviewers separately confirmed: all field markers, the
+`auth/refund` path, the `RefundAmount *Money` modeling (research marks
+`refundAmount O` explicitly on both request and response), the
+`PartnerRefundNo`-differs-from-Direct-Debit-Refund comparison, and the
+21-endpoint Transfer Debit completion count. Round 2 not needed — the
+one converged finding was comment-only, already fixed above.
