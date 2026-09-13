@@ -75,17 +75,17 @@
 //   - AuthCapture, AuthCaptureQuery, AuthVoid, AuthVoidQuery (Auth
 //     Payment sub-group, part 2 of 3)
 //     (docs/superpowers/specs/2026-09-13-phase32-auth-capture-void-design.md)
+//   - AuthRefund (completes the Auth Payment sub-group and, with it,
+//     all of Transfer Debit)
+//     (docs/superpowers/specs/2026-09-13-phase33-auth-refund-design.md)
 //
-// All of Transfer Kredit is now implemented. Transfer Debit (4
-// sub-groups: Direct Debit, CPM, Direct Debit BI-FAST, and Auth
-// Payment, 21 endpoints total, per
-// docs/research/2026-09-12-transfer-debit-portal-research.md) is in
-// progress: Direct Debit, CPM, and Direct Debit BI-FAST are complete;
-// Auth Payment (the last sub-group) is underway above, with only
-// Refund (69) remaining. The remainder of SNAP's
-// ~14 service groups (including Registrasi, Informasi Saldo, Riwayat
-// Transaksi) beyond Transfer Kredit and Transfer Debit remains
-// unresearched. See
+// All of Transfer Kredit and all of Transfer Debit are now implemented
+// (4 sub-groups — Direct Debit, CPM, Direct Debit BI-FAST, and Auth
+// Payment — 21 endpoints total, per
+// docs/research/2026-09-12-transfer-debit-portal-research.md). The
+// remainder of SNAP's ~14 service groups (including Registrasi,
+// Informasi Saldo, Riwayat Transaksi) beyond Transfer Kredit and
+// Transfer Debit remains unresearched. See
 // docs/research/2026-09-11-transfer-kredit-portal-research.md for the
 // full Transfer Kredit endpoint inventory.
 package snap
