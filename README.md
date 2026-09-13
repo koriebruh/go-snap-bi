@@ -1,5 +1,7 @@
 # go-snap-bi
 
+[![CI](https://github.com/koriebruh/go-snap-bi/actions/workflows/ci.yml/badge.svg)](https://github.com/koriebruh/go-snap-bi/actions/workflows/ci.yml)
+
 A Go implementation of Bank Indonesia's **SNAP** (Standar Nasional Open API
 Pembayaran) payment standard, document version **1.0.2** (September 2024),
 covering every API Service category published on the
@@ -125,7 +127,7 @@ tree, so a `go get` of this module or a shallow clone won't have them.
 
 ## Author
 
-[JamalKya Nanami](https://github.com/koriebruh) ([@koriebruh](https://github.com/koriebruh))
+[JamalKya Nanami](https://github.com/koriebruh) ([@koriebruh](https://github.com/koriebruh)), a.k.a. Muhammad Jamaludin Nur.
 
 ## License
 
