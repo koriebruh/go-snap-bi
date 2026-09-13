@@ -86,5 +86,6 @@
 // and docs/research/2026-09-12-transfer-debit-portal-research.md for
 // the Transfer Kredit and Transfer Debit endpoint inventories
 // specifically, and CHANGELOG.md for the phase-by-phase history of how
-// this package was built.
+// this package was built — both kept locally only (gitignored), not
+// part of this module's published tree.
 package snap

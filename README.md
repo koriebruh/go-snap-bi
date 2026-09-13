@@ -116,20 +116,10 @@ trusting its body.
 
 ## Contributing
 
-This repo uses [lefthook](https://github.com/evilmartians/lefthook) for
-local git hooks (`lefthook install` after cloning): `gofmt`/`go vet` on
-commit, `go test -race` on push. CI (`.github/workflows/ci.yml`) runs
-the same checks plus `golangci-lint`, `govulncheck`, and `gosec` on
-every push and pull request.
-
-Endpoint bindings are added one Service Code at a time, each following
-the conventions documented in `doc.go` and the per-phase design notes
-under `docs/superpowers/specs/`. Field tables and worked examples are
-sourced from the ASPI SNAP Developer Site; research notes recording
-the portal's own contradictions and ambiguities live under
-`docs/research/`. Both `docs/` paths are development notes kept
-locally only (gitignored) — not part of this module's published
-tree, so a `go get` of this module or a shallow clone won't have them.
+Endpoint bindings follow the conventions documented in `doc.go`. Run
+`lefthook install` after cloning for local pre-commit/pre-push checks
+(`gofmt`, `go vet`, `go test -race`); CI runs the same checks plus
+`golangci-lint`, `govulncheck`, and `gosec` on every push and PR.
 
 ## Author
 
