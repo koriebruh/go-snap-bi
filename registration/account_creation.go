@@ -1,0 +1,108 @@
+package registration
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	snap "github.com/koriebruh/go-snap-bi"
+)
+
+// DeviceInfo describes the device initiating a registration request.
+type DeviceInfo struct {
+	OS           string `json:"os,omitempty"`
+	OSVersion    string `json:"osVersion,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Manufacturer string `json:"manufacturer,omitempty"`
+}
+
+// AccountCreationRequest is the request body for API Account Creation
+// (Service Code 06). Every field is optional per the standard — this
+// endpoint supports several onboarding flows (seamless data, OAuth
+// redirect, direct creation) that each use a different subset of fields.
+type AccountCreationRequest struct {
+	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
+	CountryCode        string          `json:"countryCode,omitempty"`
+	CustomerID         string          `json:"customerId,omitempty"`
+	DeviceInfo         *DeviceInfo     `json:"deviceInfo,omitempty"`
+	Email              string          `json:"email,omitempty"`
+	Lang               string          `json:"lang,omitempty"`
+	Locale             string          `json:"locale,omitempty"`
+	Name               string          `json:"name,omitempty"`
+	OnboardingPartner  string          `json:"onboardingPartner,omitempty"`
+	PhoneNo            string          `json:"phoneNo,omitempty"`
+	RedirectURL        string          `json:"redirectUrl,omitempty"`
+	Scopes             string          `json:"scopes,omitempty"`
+	SeamlessData       string          `json:"seamlessData,omitempty"`
+	SeamlessSign       string          `json:"seamlessSign,omitempty"`
+	State              string          `json:"state,omitempty"`
+	MerchantID         string          `json:"merchantId,omitempty"`
+	SubMerchantID      string          `json:"subMerchantId,omitempty"`
+	TerminalType       json.RawMessage `json:"terminalType,omitempty"`
+	AdditionalInfo     json.RawMessage `json:"additionalInfo,omitempty"`
+}
+
+// AccountCreationResponse is the response body for API Account Creation.
+// APIKey is typed json.RawMessage, not string or a numeric type: the
+// standard's Guides table labels it "Numeric" with no worked example to
+// confirm whether the server actually quotes it as JSON, and no fixed type
+// dominates both possibilities — a numeric type rejects a quoted value,
+// while a plain string field fails the ENTIRE decode (discarding
+// ReferenceNo/AccountID/AuthCode too) if the server sends it unquoted, for
+// what is a non-idempotent operation where the account may already exist.
+// json.RawMessage accepts either wire shape without loss; a caller strips
+// surrounding quotes themselves if the value is quoted. A JSON null decodes
+// to a non-nil RawMessage("null"), distinct from an absent key (nil) — a
+// third shape a caller checking for presence should account for.
+type AccountCreationResponse struct {
+	ResponseCode       string          `json:"responseCode"`
+	ResponseMessage    string          `json:"responseMessage"`
+	ReferenceNo        string          `json:"referenceNo,omitempty"`
+	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
+	AuthCode           string          `json:"authCode,omitempty"`
+	APIKey             json.RawMessage `json:"apiKey,omitempty"`
+	AccountID          string          `json:"accountId,omitempty"`
+	// State is an opaque echo of the request's State (a CSRF-protection
+	// nonce for the OAuth-style flow this endpoint is part of). This
+	// package returns it unexamined; the caller is responsible for
+	// comparing it against the value it sent before acting on the result.
+	State          string          `json:"state,omitempty"`
+	AdditionalInfo json.RawMessage `json:"additionalInfo,omitempty"`
+}
+
+// AccountCreation calls the SNAP Account Creation endpoint (Service Code
+// 06, path .../{version}/registration-account-creation). hb must already
+// carry every field snap.HeaderBuilder needs except Body, which AccountCreation
+// sets itself so the exact marshaled bytes are used for both signing and
+// the wire body.
+//
+// This operation is not idempotent and this package does not retry.
+// Callers that retry a failed or timed-out call (e.g. after a network
+// error) should reuse the same X-EXTERNAL-ID, since the server's own
+// duplicate-detection keys on it — a fresh X-EXTERNAL-ID on retry risks
+// creating a second account.
+func AccountCreation(ctx context.Context, t *snap.Transport, hb snap.HeaderBuilder, req AccountCreationRequest) (AccountCreationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return AccountCreationResponse{}, fmt.Errorf("snap: account creation: encode request: %w", err)
+	}
+	hb.Body = body
+
+	env, err := t.Do(ctx, hb)
+	if err != nil {
+		return AccountCreationResponse{}, err
+	}
+	if err := snap.CheckResponseStatus(env.ResponseCode, env.StatusCode); err != nil {
+		return AccountCreationResponse{}, fmt.Errorf("snap: account creation: %w", err)
+	}
+
+	var resp AccountCreationResponse
+	if err := json.Unmarshal(env.Raw, &resp); err != nil {
+		return AccountCreationResponse{}, fmt.Errorf("snap: account creation: decode response: %w", err)
+	}
+	if resp.ResponseCode == "" {
+		return AccountCreationResponse{}, errors.New("snap: account creation: response has no responseCode")
+	}
+	return resp, nil
+}

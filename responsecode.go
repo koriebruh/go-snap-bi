@@ -79,9 +79,10 @@ func ResponseCodeError(code string) error {
 // since it only looks at the code's own embedded status, never the
 // transport's actual one.
 //
-// Exported so the transferkredit and transferdebit subpackages' calling
-// functions can invoke it; previously unexported when every endpoint lived
-// in this same package.
+// Exported so the registration, balanceinfo, transactionhistory,
+// transfercredit, and transferdebit subpackages' calling functions can
+// invoke it; previously unexported when every endpoint lived in this
+// same package.
 func CheckResponseStatus(responseCode string, httpStatus int) error {
 	if httpStatus < 200 || httpStatus >= 300 {
 		if responseCode != "" {
