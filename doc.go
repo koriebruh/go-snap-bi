@@ -65,6 +65,11 @@
 //     inbound-only notification type for Payment Notification
 //     (completes the CPM sub-group)
 //     (docs/superpowers/specs/2026-09-13-phase29-cpm-query-cancel-notify-refund-design.md)
+//   - DirectDebitBIFASTEMandateRegistration, DirectDebitBIFASTPayment,
+//     plus an inbound-only notification type for Notify (completes
+//     Direct Debit BI-FAST; only Auth Payment remains to complete
+//     Transfer Debit)
+//     (docs/superpowers/specs/2026-09-13-phase30-direct-debit-bifast-design.md)
 //
 // All of Transfer Kredit is now implemented. Transfer Debit (4
 // sub-groups: Direct Debit, CPM, Auth Payment, Direct Debit BI-FAST,
