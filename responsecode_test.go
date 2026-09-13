@@ -97,7 +97,7 @@ func TestResponseCodeError(t *testing.T) {
 }
 
 // TestCheckResponseStatus directly exercises every branch of
-// checkResponseStatus, including the 2xx-HTTP-status paths that no
+// CheckResponseStatus, including the 2xx-HTTP-status paths that no
 // httptest-based binding test reaches (every existing non-2xx-responseCode
 // test also happens to send a matching non-2xx HTTP status, and the only
 // no-responseCode fixture is served with a non-2xx status too — so the
@@ -134,18 +134,18 @@ func TestCheckResponseStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkResponseStatus(tt.responseCode, tt.httpStatus)
+			err := CheckResponseStatus(tt.responseCode, tt.httpStatus)
 			if tt.wantErr && err == nil {
-				t.Fatalf("checkResponseStatus(%q, %d) = nil, want non-nil", tt.responseCode, tt.httpStatus)
+				t.Fatalf("CheckResponseStatus(%q, %d) = nil, want non-nil", tt.responseCode, tt.httpStatus)
 			}
 			if !tt.wantErr && err != nil {
-				t.Fatalf("checkResponseStatus(%q, %d) = %v, want nil", tt.responseCode, tt.httpStatus, err)
+				t.Fatalf("CheckResponseStatus(%q, %d) = %v, want nil", tt.responseCode, tt.httpStatus, err)
 			}
 			if tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs) {
-				t.Errorf("checkResponseStatus(%q, %d) = %v, want errors.Is match for %v", tt.responseCode, tt.httpStatus, err, tt.wantErrIs)
+				t.Errorf("CheckResponseStatus(%q, %d) = %v, want errors.Is match for %v", tt.responseCode, tt.httpStatus, err, tt.wantErrIs)
 			}
 			if tt.wantErrIsNot != nil && errors.Is(err, tt.wantErrIsNot) {
-				t.Errorf("checkResponseStatus(%q, %d) = %v, want errors.Is to NOT match %v (transport status must win exclusively)", tt.responseCode, tt.httpStatus, err, tt.wantErrIsNot)
+				t.Errorf("CheckResponseStatus(%q, %d) = %v, want errors.Is to NOT match %v (transport status must win exclusively)", tt.responseCode, tt.httpStatus, err, tt.wantErrIsNot)
 			}
 		})
 	}

@@ -70,7 +70,7 @@ func ResponseCodeError(code string) error {
 	return fmt.Errorf("%w: response code %s", sentinelForHTTPStatus(httpStatus), code)
 }
 
-// checkResponseStatus is the authoritative success/failure check for a
+// CheckResponseStatus is the authoritative success/failure check for a
 // decoded SNAP response: the transport-level HTTP status always wins over
 // what responseCode claims. A non-2xx HTTP status is never treated as
 // success, even if responseCode's own embedded class says otherwise (e.g. a
@@ -78,7 +78,11 @@ func ResponseCodeError(code string) error {
 // with a templated "success" body) — envelopeError alone cannot catch this,
 // since it only looks at the code's own embedded status, never the
 // transport's actual one.
-func checkResponseStatus(responseCode string, httpStatus int) error {
+//
+// Exported so the transferkredit and transferdebit subpackages' calling
+// functions can invoke it; previously unexported when every endpoint lived
+// in this same package.
+func CheckResponseStatus(responseCode string, httpStatus int) error {
 	if httpStatus < 200 || httpStatus >= 300 {
 		if responseCode != "" {
 			if err := envelopeError(responseCode); err != nil {

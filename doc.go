@@ -1,13 +1,33 @@
 // Package snap implements Bank Indonesia's SNAP (Standar Nasional Open API
 // Pembayaran) standard, document version 1.0.2 (September 2024).
 //
-// Phase 1 (complete): signing primitives, token lifecycle, server-side
-// verification, header assembly with per-PJP quirk hooks, and response-code
-// parsing — see docs/superpowers/specs/2026-09-10-go-snap-bi-core-design.md.
+// This package holds only the core primitives shared across every SNAP
+// service: signing (SignSymmetric, SignAsymmetric, BuildStringToSignTransaction),
+// token lifecycle (Token, TokenManager), server-side inbound-request
+// verification (ServerVerifier, KeyStore), header assembly with per-PJP
+// quirk hooks (HeaderBuilder), response-code parsing and the
+// authoritative status check (ParseResponseCode, CheckResponseStatus,
+// the Err* sentinels), the request/response transport (Transport,
+// Envelope), and the shared Money amount type — see
+// docs/superpowers/specs/2026-09-10-go-snap-bi-core-design.md.
 //
-// Per-service bindings (in progress): typed request/response types built on
-// Phase 1, added incrementally, one service at a time, each its own
-// numbered phase. Implemented so far:
+// Per-service request/response types and their calling functions live in
+// two subpackages, split along SNAP's own top-level taxonomy:
+//   - github.com/koriebruh/go-snap-bi/transferkredit — Transfer Kredit
+//     (BalanceInquiry, Virtual Account, MPM/QR, Trigger Transfer, Bulk
+//     Cash In, Transfer to Bank/OTC, Customer Top Up, and related
+//     account/card/OTP endpoints)
+//   - github.com/koriebruh/go-snap-bi/transferdebit — Transfer Debit
+//     (Direct Debit, CPM, Direct Debit BI-FAST, Auth Payment)
+//
+// Both subpackages import this package (as snap) for the shared types
+// above; internal/snaptest holds a test-only HeaderBuilder helper
+// shared between them, not part of the public API.
+//
+// Per-service bindings were added incrementally, one service at a time,
+// each its own numbered phase, before this package was split into the
+// two subpackages above. Implemented so far (types below now live in
+// transferkredit or transferdebit, not in this package):
 //   - BalanceInquiry (docs/superpowers/specs/2026-09-11-phase2-balance-inquiry-design.md)
 //   - TransactionHistoryList (docs/superpowers/specs/2026-09-11-phase3-transaction-history-design.md)
 //   - AccountCreation (docs/superpowers/specs/2026-09-11-phase4-account-creation-design.md)
