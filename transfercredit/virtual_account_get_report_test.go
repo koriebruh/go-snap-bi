@@ -45,16 +45,16 @@ func TestVAGetReport_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	resp, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{
+	resp, err := VAGetReport(context.Background(), tr, hb, VAGetReportRequest{
 		PartnerServiceID: json.RawMessage(`12345`),
 	})
 	if err != nil {
 		t.Fatalf("VAGetReport() error = %v", err)
 	}
 
-	want := GetReportResponse{
+	want := VAGetReportResponse{
 		ResponseCode:    "2003500",
 		ResponseMessage: "Request has been processed successfully",
 		VirtualAccountData: []GetReportData{
@@ -99,9 +99,9 @@ func TestVAGetReport_UsesPOSTMethod(t *testing.T) {
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
 	hb.Method = http.MethodGet
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	if _, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{}); err != nil {
+	if _, err := VAGetReport(context.Background(), tr, hb, VAGetReportRequest{}); err != nil {
 		t.Fatalf("VAGetReport() error = %v", err)
 	}
 	mu.Lock()
@@ -125,9 +125,9 @@ func TestVAGetReport_MalformedPartnerServiceIDIsMarshalError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	_, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{
+	_, err := VAGetReport(context.Background(), tr, hb, VAGetReportRequest{
 		PartnerServiceID: json.RawMessage(`{`),
 	})
 	if err == nil {
@@ -155,9 +155,9 @@ func TestVAGetReport_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	req := GetReportRequest{
+	req := VAGetReportRequest{
 		PartnerServiceID: json.RawMessage(`12345`),
 		StartDate:        "2020-12-01",
 		EndDate:          "2020-12-31",
@@ -202,9 +202,9 @@ func TestVAGetReport_MandatoryFieldAlwaysSerialized(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	if _, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{}); err != nil {
+	if _, err := VAGetReport(context.Background(), tr, hb, VAGetReportRequest{}); err != nil {
 		t.Fatalf("VAGetReport() error = %v", err)
 	}
 
@@ -233,9 +233,9 @@ func TestVAGetReport_NonTwoXXResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	_, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{})
+	_, err := VAGetReport(context.Background(), tr, hb, VAGetReportRequest{})
 	if err == nil {
 		t.Fatal("VAGetReport() error = nil, want non-nil for a non-2xx responseCode")
 	}
@@ -253,9 +253,9 @@ func TestVAGetReport_NonTwoXXStatusWithTwoXXBodyIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	resp, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{})
+	resp, err := VAGetReport(context.Background(), tr, hb, VAGetReportRequest{})
 	if err == nil {
 		t.Fatalf("VAGetReport() error = nil, want non-nil for HTTP 500 with a 2xx-shaped body; got %+v", resp)
 	}
@@ -272,9 +272,9 @@ func TestVAGetReport_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	resp, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{})
+	resp, err := VAGetReport(context.Background(), tr, hb, VAGetReportRequest{})
 	if err == nil {
 		t.Fatalf("VAGetReport() error = nil, want non-nil; got zero-value response = %+v", resp)
 	}
@@ -288,9 +288,9 @@ func TestVAGetReport_TwoXXStatusWithNoResponseCodeIsError(t *testing.T) {
 // layer (transport.go) into an internal string-typed field before any
 // per-service Response type sees the body, and again by this
 // endpoint's own json.Unmarshal(env.Raw, &resp) into
-// GetReportResponse.ResponseCode string. A bare-number responseCode
+// VAGetReportResponse.ResponseCode string. A bare-number responseCode
 // fails at the transport layer's decode first (this test pins that
-// current behavior); it would also fail at GetReportResponse's own
+// current behavior); it would also fail at VAGetReportResponse's own
 // decode if the transport layer alone were fixed, per the same
 // reasoning verified empirically for InquiryVAResponse in Phase 13
 // (a string field cannot receive a bare JSON number). Fixing this
@@ -304,9 +304,9 @@ func TestVAGetReport_BareNumberResponseCodeIsAKnownLimitation(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/get-report"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/report"
 	tr := &snap.Transport{}
-	_, err := VAGetReport(context.Background(), tr, hb, GetReportRequest{})
+	_, err := VAGetReport(context.Background(), tr, hb, VAGetReportRequest{})
 	if err == nil {
 		t.Fatal("VAGetReport() error = nil, want non-nil: a bare-number responseCode is a known limitation, not silently accepted")
 	}

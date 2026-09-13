@@ -9,6 +9,15 @@ import (
 
 // KeyStore is caller-implemented — key/secret storage is an application
 // concern (DB, vault, etc.), not something this package should own.
+//
+// For an unrecognized clientKey, an implementation must return a non-nil
+// error (its own sentinel, or any distinct error — this package doesn't
+// require a specific one) rather than a zero-value crypto.PublicKey/""
+// with a nil error: this package's callers treat a nil error as "the
+// lookup succeeded," so a zero-value-with-nil-error response for an
+// unknown key is indistinguishable from a misconfigured store and can
+// surface as a confusing ErrSignatureMismatch/ErrEmptyClientSecret
+// instead of a clear "unknown client" failure.
 type KeyStore interface {
 	PublicKey(clientKey string) (crypto.PublicKey, error)
 	ClientSecret(clientKey string) (string, error)
@@ -22,9 +31,10 @@ type KeyStore interface {
 // same partner configuration, on the client and server side respectively.
 type SignatureMode int
 
+// The two SignatureMode values a ServerVerifier can be configured with.
 const (
 	SignatureModeAsymmetric SignatureMode = iota // default zero value; matches HeaderBuilder{}'s default (Symmetric: false)
-	SignatureModeSymmetric
+	SignatureModeSymmetric                       // matches HeaderBuilder{Symmetric: true}
 )
 
 // IncomingRequest holds the fields a ServerVerifier needs, extracted by the
@@ -38,13 +48,34 @@ type IncomingRequest struct {
 	ClientKey   string // X-CLIENT-KEY header value
 	Signature   string // X-SIGNATURE header value
 	AccessToken string // Authorization header's token, without the "Bearer " prefix; required for symmetric transaction verification, ignored otherwise
+	ExternalID  string // X-EXTERNAL-ID header value; carried through for a caller's own replay defense (see VerifyTransactionRequest's doc comment) but not checked by this package
 }
 
 // ErrSignatureMismatch is returned when a signature fails to verify against
 // an otherwise-successfully-looked-up key/secret, for both signing modes —
 // giving callers one mode-independent errors.Is check rather than needing to
 // know that VerifyAsymmetric happens to return its own error on mismatch.
+//
+// This is deliberately NOT returned for a KeyStore/config mistake — an
+// empty ClientSecret (see ErrEmptyClientSecret) or an unusable RSA key
+// (ErrNotRSASigner, ErrWeakRSAKey, both from signing.go) are distinct,
+// separately errors.Is-matchable failures. This lets a caller who wants
+// to distinguish the two cases (e.g. alerting differently on a
+// tampered/forged request than on its own configuration bug) do so via
+// errors.Is against the specific sentinel — this package does not
+// itself decide what a caller's monitoring or alerting should key on.
 var ErrSignatureMismatch = errors.New("snap: signature mismatch")
+
+// ErrEmptyClientSecret is returned when a KeyStore's ClientSecret lookup
+// succeeds but returns an empty string. Deliberately distinct from
+// ErrSignatureMismatch: VerifySymmetric already refuses to treat an empty
+// secret as "verifies against the empty string" (an empty HMAC key is a
+// publicly computable MAC), but that refusal is otherwise
+// indistinguishable from a genuine tampered-signature failure to a
+// caller checking errors.Is(err, ErrSignatureMismatch) — this sentinel
+// lets a caller tell "your KeyStore has a bug" apart from "this request
+// was tampered with or forged."
+var ErrEmptyClientSecret = errors.New("snap: verify: KeyStore.ClientSecret returned an empty string")
 
 // ErrNoKeyStore is returned when a ServerVerifier is used with a nil
 // KeyStore, instead of panicking on the first lookup.
@@ -103,14 +134,14 @@ func (v *ServerVerifier) checkFreshness(timestamp string) error {
 	}
 	parsed, err := time.Parse(v.profile().TimestampLayout(), timestamp)
 	if err != nil {
-		return fmt.Errorf("snap: verify: parse timestamp %s: invalid format", truncateForError(timestamp))
+		return fmt.Errorf("snap: verify: parse timestamp %q: invalid format", TruncateForError(timestamp))
 	}
 	skew := v.now().Sub(parsed)
 	if skew < 0 {
 		skew = -skew
 	}
 	if skew > window {
-		return fmt.Errorf("snap: verify: timestamp %s outside freshness window %s", truncateForError(timestamp), window)
+		return fmt.Errorf("snap: verify: timestamp %q outside freshness window %s", TruncateForError(timestamp), window)
 	}
 	return nil
 }
@@ -131,6 +162,12 @@ func (v *ServerVerifier) VerifyAccessTokenRequest(req IncomingRequest) error {
 	}
 	stringToSign := BuildStringToSignAccessToken(req.ClientKey, req.Timestamp)
 	if err := VerifyAsymmetric(pub, stringToSign, req.Signature); err != nil {
+		if errors.Is(err, ErrNotRSASigner) || errors.Is(err, ErrWeakRSAKey) {
+			// A KeyStore/config problem (the public key isn't a usable RSA
+			// key), not evidence the request was tampered with — don't
+			// fold it under ErrSignatureMismatch.
+			return fmt.Errorf("snap: verify access token request: %w", err)
+		}
 		return fmt.Errorf("snap: verify access token request: %w: %w", ErrSignatureMismatch, err)
 	}
 	return nil
@@ -147,6 +184,15 @@ func (v *ServerVerifier) VerifyAccessTokenRequest(req IncomingRequest) error {
 // unexpired, or was actually issued to this client. Token issuance and
 // introspection are out of this package's scope; callers who need that
 // check must perform it separately.
+//
+// This function also does not itself defend against replay: within
+// TimestampWindow, a captured, otherwise-untampered request verifies
+// identically on a second delivery. The standard requires X-EXTERNAL-ID
+// uniqueness per client per day for exactly this reason — req.ExternalID
+// is carried through so a caller can maintain their own dedup store (a
+// cache, a database unique constraint) keyed on ClientKey+ExternalID,
+// but this package does not do so itself, the same way it does not own
+// KeyStore's storage.
 func (v *ServerVerifier) VerifyTransactionRequest(req IncomingRequest) error {
 	if v.KeyStore == nil {
 		return ErrNoKeyStore
@@ -163,6 +209,13 @@ func (v *ServerVerifier) VerifyTransactionRequest(req IncomingRequest) error {
 		if err != nil {
 			return fmt.Errorf("snap: verify transaction request: secret lookup: %w", err)
 		}
+		if secret == "" {
+			// Same config-vs-tampering distinction as the asymmetric
+			// branch below: an empty secret means the KeyStore itself is
+			// misconfigured for this client, not that the request was
+			// forged, so it must not be reported as ErrSignatureMismatch.
+			return fmt.Errorf("snap: verify transaction request: %w", ErrEmptyClientSecret)
+		}
 		if !VerifySymmetric(secret, stringToSign, req.Signature) {
 			return fmt.Errorf("snap: verify transaction request: %w", ErrSignatureMismatch)
 		}
@@ -174,6 +227,9 @@ func (v *ServerVerifier) VerifyTransactionRequest(req IncomingRequest) error {
 		return fmt.Errorf("snap: verify transaction request: key lookup: %w", err)
 	}
 	if err := VerifyAsymmetric(pub, stringToSign, req.Signature); err != nil {
+		if errors.Is(err, ErrNotRSASigner) || errors.Is(err, ErrWeakRSAKey) {
+			return fmt.Errorf("snap: verify transaction request: %w", err)
+		}
 		return fmt.Errorf("snap: verify transaction request: %w: %w", ErrSignatureMismatch, err)
 	}
 	return nil

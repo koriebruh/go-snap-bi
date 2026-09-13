@@ -40,7 +40,11 @@ type AuthVoidQueryResponse struct {
 }
 
 // AuthVoidQuery calls the SNAP Void Query endpoint (Service Code 68,
-// HTTP POST — no method override). hb must already carry every field
+// HTTP POST — no method override; research's Overview tab marks this
+// GET, but every worked example across all 7 Auth Payment endpoints is
+// POST-shaped with a mandatory JSON body, and this package's signing
+// path has no representation for a body-carrying GET — see
+// AuthPayment's doc comment for the full reasoning). hb must already carry every field
 // snap.HeaderBuilder needs except Body, which AuthVoidQuery sets itself so
 // the exact marshaled bytes are used for both signing and the wire
 // body.

@@ -68,10 +68,10 @@ func TestTransactionHistoryList_ParsesWorkedExampleResponse(t *testing.T) {
 		DetailData: []TransactionDetail{
 			{
 				DateTime: "2019-07-03T12:08:56+07:00",
-				Amount:   snap.Money{Value: "12345678.00", Currency: "IDR"},
+				Amount:   &snap.Money{Value: "12345678.00", Currency: "IDR"},
 				Remark:   "Payment to Warung Ikan Bakar",
 				SourceOfFunds: []SourceOfFund{
-					{Source: "BALANCE", Amount: snap.Money{Value: "10000.00", Currency: "IDR"}},
+					{Source: "BALANCE", Amount: &snap.Money{Value: "10000.00", Currency: "IDR"}},
 				},
 				Status:         "SUCCESS",
 				Type:           "PAYMENT",

@@ -55,9 +55,11 @@ type TransactionStatusInquiryBankResponse struct {
 }
 
 // TransactionStatusInquiryBank calls the SNAP Transaction Status
-// Inquiry Bank endpoint (Service Code 36, path
-// .../{version}/transaction-status-inquiry-bank, HTTP POST — no method
-// override). hb must already carry every field snap.HeaderBuilder needs
+// Inquiry Bank endpoint (Service Code 36, path .../{version}/transfer/status
+// — the path was previously misstated here as
+// transaction-status-inquiry-bank with no recorded justification,
+// corrected against research §1's own path table, HTTP POST — no
+// method override). hb must already carry every field snap.HeaderBuilder needs
 // except Body, which TransactionStatusInquiryBank sets itself so the
 // exact marshaled bytes are used for both signing and the wire body.
 func TransactionStatusInquiryBank(ctx context.Context, t *snap.Transport, hb snap.HeaderBuilder, req TransactionStatusInquiryBankRequest) (TransactionStatusInquiryBankResponse, error) {

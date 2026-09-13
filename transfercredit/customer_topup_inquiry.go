@@ -49,8 +49,10 @@ type AccountInquiryCustomerTopUpResponse struct {
 
 // AccountInquiryCustomerTopUp calls the SNAP Account Inquiry -
 // Customer Top Up endpoint (Service Code 37, path
-// .../{version}/account-inquiry-customer-top-up, HTTP POST — no method
-// override). hb must already carry every field snap.HeaderBuilder needs
+// .../{version}/emoney/account-inquiry — the path was previously
+// misstated here as account-inquiry-customer-top-up with no recorded
+// justification, corrected against research §1's own path table, HTTP
+// POST — no method override). hb must already carry every field snap.HeaderBuilder needs
 // except Body, which AccountInquiryCustomerTopUp sets itself so the
 // exact marshaled bytes are used for both signing and the wire body.
 func AccountInquiryCustomerTopUp(ctx context.Context, t *snap.Transport, hb snap.HeaderBuilder, req AccountInquiryCustomerTopUpRequest) (AccountInquiryCustomerTopUpResponse, error) {

@@ -28,8 +28,10 @@ type BulkCashInNotificationItem struct {
 }
 
 // NotifyBulkCashInRequest is the request body for API Notify Bulk Cash
-// In (Service Code 41, path .../{version}/notify-bulk-cash-in). This
-// is a settlement callback the PJP receives, not a call this package
+// In (Service Code 41, path .../{version}/emoney/bulk-cashin-notify —
+// the path was previously misstated here as notify-bulk-cash-in with
+// no recorded justification, corrected against research §1's own path
+// table). This is a settlement callback the PJP receives, not a call this package
 // makes — no calling function is provided, matching the package's
 // established convention for inbound notification endpoints
 // (InterbankBulkTransferNotificationRequest, Phase 12): a caller wires

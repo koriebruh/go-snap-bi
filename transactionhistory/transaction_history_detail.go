@@ -18,19 +18,22 @@ type TransactionHistoryDetailRequest struct {
 }
 
 // TransactionHistoryDetailResponse is the response body for API
-// Transaction History Detail. Amount and RefundAmount are Mandatory
-// containers with Mandatory members, so both are modeled as plain
-// (non-pointer) snap.Money, per this package's convention (see
-// transaction_history.go's TransactionDetail.Amount).
+// Transaction History Detail. Amount and RefundAmount are Optional
+// containers with Mandatory members (the Guides tab marks both
+// "O"), so both are modeled as *snap.Money, per this package's
+// Optional-container convention — corrected from an earlier version
+// of this type that had both modeled as plain (non-pointer) snap.Money
+// based on a misreading of the Guides tab as Mandatory; caught by a
+// go-review pass that re-fetched the raw table directly.
 type TransactionHistoryDetailResponse struct {
 	ResponseCode       string          `json:"responseCode"`
 	ResponseMessage    string          `json:"responseMessage"`
 	ReferenceNo        string          `json:"referenceNo,omitempty"`
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
-	Amount             snap.Money      `json:"amount"`
+	Amount             *snap.Money     `json:"amount,omitempty"`
 	CancelledTime      string          `json:"cancelledTime,omitempty"`
 	DateTime           string          `json:"dateTime"`
-	RefundAmount       snap.Money      `json:"refundAmount"`
+	RefundAmount       *snap.Money     `json:"refundAmount,omitempty"`
 	Remark             string          `json:"remark,omitempty"`
 	SourceOfFunds      []SourceOfFund  `json:"sourceOfFunds,omitempty"`
 	Status             string          `json:"status"`

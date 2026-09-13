@@ -12,7 +12,13 @@ import (
 // CardRegistrationRequest is the request body for API Card Registration
 // (Service Code 01, path .../{version}/registration-card-bind).
 // BankCardNo and CustIDMerchant are the two mandatory fields per the
-// Guides tab.
+// Guides tab — CardData's own Mandatory column is blank/unmarked, not
+// "M". An earlier revision of this doc comment briefly claimed CardData
+// was mandatory too and removed its omitempty, based on a misread of
+// the Guides tab (the "Encrypted Object" Data Type cell was mistaken
+// for a Mandatory marker); a go-review pass re-fetched the raw table
+// directly and caught the misreading before it shipped, so this is
+// back to its original, correct form.
 //
 // CardData and Limit are typed json.RawMessage: the Guides tab labels
 // CardData "Encrypted Object" and Limit "decimal", each permitting a

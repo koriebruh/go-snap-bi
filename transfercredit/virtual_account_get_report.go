@@ -10,7 +10,7 @@ import (
 	snap "github.com/koriebruh/go-snap-bi"
 )
 
-// GetReportRequest is the request body for API VA - Get Report
+// VAGetReportRequest is the request body for API VA - Get Report
 // (Service Code 35). PartnerServiceID is the only mandatory field per
 // the Guides tab; research §5.3 line 155 documents its type as
 // flipping to Number for this endpoint specifically (String everywhere
@@ -20,7 +20,7 @@ import (
 // models it as POST with a JSON body, matching every other endpoint in
 // the group — see the design doc for the unresolved GET/POST
 // contradiction (research §6 item 1).
-type GetReportRequest struct {
+type VAGetReportRequest struct {
 	PartnerServiceID json.RawMessage `json:"partnerServiceId"`
 	StartDate        string          `json:"startDate,omitempty"`
 	StartTime        string          `json:"startTime,omitempty"`
@@ -29,7 +29,7 @@ type GetReportRequest struct {
 	AdditionalInfo   json.RawMessage `json:"additionalInfo,omitempty"`
 }
 
-// GetReportData is one entry in GetReportResponse's "virtualAccountdata"
+// GetReportData is one entry in VAGetReportResponse's "virtualAccountdata"
 // array (lowercase d, research §5.3 line 132) — field-identical to
 // VAInquiryStatusData, per §5.3 line 155's "each item shaped like the
 // Payment/Inquiry-Status response object." It is a distinct type (not
@@ -63,18 +63,21 @@ type GetReportData struct {
 	TransactionDate         string          `json:"transactionDate,omitempty"`
 }
 
-// GetReportResponse is the response body for API VA - Get Report. It
+// VAGetReportResponse is the response body for API VA - Get Report. It
 // is the only VA response in the package whose data field is an array
 // rather than a single object (research §5.3 line 155).
-type GetReportResponse struct {
+type VAGetReportResponse struct {
 	ResponseCode       string          `json:"responseCode"`
 	ResponseMessage    string          `json:"responseMessage"`
 	VirtualAccountData []GetReportData `json:"virtualAccountdata,omitempty"`
 }
 
 // VAGetReport calls the SNAP VA - Get Report endpoint (Service Code
-// 35, path .../{version}/transfer-va/get-report). hb must already
-// carry every field snap.HeaderBuilder needs except Method and Body:
+// 35, path .../{version}/transfer-va/report — the path was previously
+// misstated here as transfer-va/get-report with no recorded
+// justification, corrected against research §1's own path table). hb
+// must already carry every field snap.HeaderBuilder needs except
+// Method and Body:
 // VAGetReport sets Method to POST itself — this is the one VA endpoint
 // where the source spec contradicts itself (GET per the Guides tab,
 // POST-with-body per the code snippet), and the package has chosen
@@ -88,28 +91,28 @@ type GetReportResponse struct {
 // body at 10 MiB (see transport.go), so callers pulling large reports
 // should page by narrower date/time ranges rather than one unbounded
 // call.
-func VAGetReport(ctx context.Context, t *snap.Transport, hb snap.HeaderBuilder, req GetReportRequest) (GetReportResponse, error) {
+func VAGetReport(ctx context.Context, t *snap.Transport, hb snap.HeaderBuilder, req VAGetReportRequest) (VAGetReportResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
-		return GetReportResponse{}, fmt.Errorf("snap: va get report: encode request: %w", err)
+		return VAGetReportResponse{}, fmt.Errorf("snap: va get report: encode request: %w", err)
 	}
 	hb.Method = http.MethodPost
 	hb.Body = body
 
 	env, err := t.Do(ctx, hb)
 	if err != nil {
-		return GetReportResponse{}, err
+		return VAGetReportResponse{}, err
 	}
 	if err := snap.CheckResponseStatus(env.ResponseCode, env.StatusCode); err != nil {
-		return GetReportResponse{}, fmt.Errorf("snap: va get report: %w", err)
+		return VAGetReportResponse{}, fmt.Errorf("snap: va get report: %w", err)
 	}
 
-	var resp GetReportResponse
+	var resp VAGetReportResponse
 	if err := json.Unmarshal(env.Raw, &resp); err != nil {
-		return GetReportResponse{}, fmt.Errorf("snap: va get report: decode response: %w", err)
+		return VAGetReportResponse{}, fmt.Errorf("snap: va get report: decode response: %w", err)
 	}
 	if resp.ResponseCode == "" {
-		return GetReportResponse{}, errors.New("snap: va get report: response has no responseCode")
+		return VAGetReportResponse{}, errors.New("snap: va get report: response has no responseCode")
 	}
 	return resp, nil
 }

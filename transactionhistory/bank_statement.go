@@ -45,9 +45,13 @@ type BankStatementEntryTotal struct {
 }
 
 // BankStatementDetailBalanceEntry is one entry in a
-// BankStatementDetailBalance's StartAmount/EndAmount arrays.
+// BankStatementDetailBalance's StartAmount/EndAmount arrays. Amount is
+// an Optional container per the field table ("O"), unlike
+// BankStatementEntryTotal.Amount (also nested one level, but "M"
+// there) — the two are not harmonized, each modeled per its own table
+// row, confirmed by two independent targeted re-fetches.
 type BankStatementDetailBalanceEntry struct {
-	Amount snap.Money `json:"amount"`
+	Amount *snap.Money `json:"amount,omitempty"`
 }
 
 // BankStatementDetailBalance is a BankStatementDetail's detailBalance
@@ -59,11 +63,15 @@ type BankStatementDetailBalance struct {
 }
 
 // BankStatementDetail is one entry in BankStatementResponse's detailData
-// array: a single transaction line.
+// array: a single transaction line. Amount and OriginAmount are Optional
+// containers per the field table (both "O"), so both are modeled as
+// *snap.Money — corrected from an earlier version that had both as plain
+// (non-pointer) snap.Money, found by a pre-publish audit and confirmed by
+// a direct re-fetch of the field table.
 type BankStatementDetail struct {
 	DetailBalance           *BankStatementDetailBalance `json:"detailBalance,omitempty"`
-	Amount                  snap.Money                  `json:"amount"`
-	OriginAmount            snap.Money                  `json:"originAmount"`
+	Amount                  *snap.Money                 `json:"amount,omitempty"`
+	OriginAmount            *snap.Money                 `json:"originAmount,omitempty"`
 	TransactionDate         string                      `json:"transactionDate"`
 	Remark                  string                      `json:"remark"`
 	TransactionID           string                      `json:"transactionId,omitempty"`

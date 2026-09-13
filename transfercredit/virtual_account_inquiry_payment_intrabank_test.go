@@ -40,7 +40,7 @@ func TestVAInquiryPaymentIntrabank_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-payment-intrabank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-intrabank"
 	tr := &snap.Transport{}
 	resp, err := VAInquiryPaymentIntrabank(context.Background(), tr, hb, VAInquiryPaymentIntrabankRequest{
 		PartnerServiceID: "12345",
@@ -89,7 +89,7 @@ func TestVAInquiryPaymentIntrabank_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-payment-intrabank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-intrabank"
 	tr := &snap.Transport{}
 	req := VAInquiryPaymentIntrabankRequest{
 		PartnerServiceID:   "12345",
@@ -138,7 +138,7 @@ func TestVAInquiryPaymentIntrabank_MandatoryFieldsAlwaysSerialized(t *testing.T)
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-payment-intrabank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-intrabank"
 	tr := &snap.Transport{}
 	if _, err := VAInquiryPaymentIntrabank(context.Background(), tr, hb, VAInquiryPaymentIntrabankRequest{}); err != nil {
 		t.Fatalf("VAInquiryPaymentIntrabank() error = %v", err)
@@ -177,7 +177,7 @@ func TestVAInquiryPaymentIntrabank_MalformedCustomerNoIsMarshalError(t *testing.
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-payment-intrabank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-intrabank"
 	tr := &snap.Transport{}
 	_, err := VAInquiryPaymentIntrabank(context.Background(), tr, hb, VAInquiryPaymentIntrabankRequest{
 		CustomerNo: json.RawMessage(`{`),
@@ -199,7 +199,7 @@ func TestVAInquiryPaymentIntrabank_NonTwoXXResponseCodeIsError(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-payment-intrabank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-intrabank"
 	tr := &snap.Transport{}
 	_, err := VAInquiryPaymentIntrabank(context.Background(), tr, hb, VAInquiryPaymentIntrabankRequest{})
 	if err == nil {
@@ -219,7 +219,7 @@ func TestVAInquiryPaymentIntrabank_NonTwoXXStatusWithTwoXXBodyIsError(t *testing
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-payment-intrabank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-intrabank"
 	tr := &snap.Transport{}
 	resp, err := VAInquiryPaymentIntrabank(context.Background(), tr, hb, VAInquiryPaymentIntrabankRequest{})
 	if err == nil {
@@ -238,7 +238,7 @@ func TestVAInquiryPaymentIntrabank_TwoXXStatusWithNoResponseCodeIsError(t *testi
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-payment-intrabank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer-va/inquiry-intrabank"
 	tr := &snap.Transport{}
 	resp, err := VAInquiryPaymentIntrabank(context.Background(), tr, hb, VAInquiryPaymentIntrabankRequest{})
 	if err == nil {

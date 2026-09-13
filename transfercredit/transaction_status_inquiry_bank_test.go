@@ -42,7 +42,7 @@ func TestTransactionStatusInquiryBank_ParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transaction-status-inquiry-bank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer/status"
 	tr := &snap.Transport{}
 	resp, err := TransactionStatusInquiryBank(context.Background(), tr, hb, TransactionStatusInquiryBankRequest{
 		ServiceCode: "17",
@@ -92,7 +92,7 @@ func TestTransactionStatusInquiryBank_RequestBodyRoundTrips(t *testing.T) {
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transaction-status-inquiry-bank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer/status"
 	tr := &snap.Transport{}
 	req := TransactionStatusInquiryBankRequest{
 		OriginalPartnerReferenceNo: "partner-ref-1",
@@ -141,7 +141,7 @@ func TestTransactionStatusInquiryBank_MandatoryFieldAlwaysSerialized(t *testing.
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transaction-status-inquiry-bank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer/status"
 	tr := &snap.Transport{}
 	if _, err := TransactionStatusInquiryBank(context.Background(), tr, hb, TransactionStatusInquiryBankRequest{}); err != nil {
 		t.Fatalf("TransactionStatusInquiryBank() error = %v", err)
@@ -174,7 +174,7 @@ func TestTransactionStatusInquiryBank_NonTwoXXResponseCodeIsError(t *testing.T) 
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transaction-status-inquiry-bank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer/status"
 	tr := &snap.Transport{}
 	_, err := TransactionStatusInquiryBank(context.Background(), tr, hb, TransactionStatusInquiryBankRequest{})
 	if err == nil {
@@ -194,7 +194,7 @@ func TestTransactionStatusInquiryBank_NonTwoXXStatusWithTwoXXBodyIsError(t *test
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transaction-status-inquiry-bank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer/status"
 	tr := &snap.Transport{}
 	resp, err := TransactionStatusInquiryBank(context.Background(), tr, hb, TransactionStatusInquiryBankRequest{})
 	if err == nil {
@@ -213,7 +213,7 @@ func TestTransactionStatusInquiryBank_TwoXXStatusWithNoResponseCodeIsError(t *te
 	defer server.Close()
 
 	hb := snaptest.TestHeaderBuilder(server.URL)
-	hb.EndpointURL = server.URL + "/v1.0/transaction-status-inquiry-bank"
+	hb.EndpointURL = server.URL + "/v1.0/transfer/status"
 	tr := &snap.Transport{}
 	resp, err := TransactionStatusInquiryBank(context.Background(), tr, hb, TransactionStatusInquiryBankRequest{})
 	if err == nil {

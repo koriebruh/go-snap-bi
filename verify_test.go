@@ -256,6 +256,59 @@ func TestServerVerifier_KeyStoreLookupFailureIsNotSwallowed(t *testing.T) {
 	})
 }
 
+// TestServerVerifier_EmptyClientSecretIsNotConflatedWithMismatch pins that
+// a KeyStore returning "" for ClientSecret (a config mistake, not evidence
+// of a tampered request) surfaces as ErrEmptyClientSecret, distinguishable
+// from ErrSignatureMismatch.
+func TestServerVerifier_EmptyClientSecretIsNotConflatedWithMismatch(t *testing.T) {
+	store := fakeKeyStore{secrets: map[string]string{verifyTestClientA: ""}}
+	v := &ServerVerifier{KeyStore: store, Mode: SignatureModeSymmetric, TimestampWindow: DisableTimestampFreshnessCheck}
+	req := validTransactionRequest(t, true)
+
+	err := v.VerifyTransactionRequest(req)
+	if err == nil {
+		t.Fatal("want error, got nil")
+	}
+	if !errors.Is(err, ErrEmptyClientSecret) {
+		t.Fatalf("want errors.Is(err, ErrEmptyClientSecret), got %v", err)
+	}
+	if errors.Is(err, ErrSignatureMismatch) {
+		t.Fatalf("empty-secret config error must not be conflated with ErrSignatureMismatch, got %v", err)
+	}
+}
+
+// TestServerVerifier_UnusableRSAKeyIsNotConflatedWithMismatch pins that a
+// KeyStore returning a non-RSA public key (a config mistake) surfaces as
+// ErrNotRSASigner, distinguishable from ErrSignatureMismatch, for both
+// VerifyTransactionRequest and VerifyAccessTokenRequest.
+func TestServerVerifier_UnusableRSAKeyIsNotConflatedWithMismatch(t *testing.T) {
+	store := fakeKeyStore{pubs: map[string]crypto.PublicKey{verifyTestClientA: "not-an-rsa-key"}}
+
+	t.Run("transaction", func(t *testing.T) {
+		v := &ServerVerifier{KeyStore: store, Mode: SignatureModeAsymmetric, TimestampWindow: DisableTimestampFreshnessCheck}
+		req := validTransactionRequest(t, false)
+		err := v.VerifyTransactionRequest(req)
+		if !errors.Is(err, ErrNotRSASigner) {
+			t.Fatalf("want errors.Is(err, ErrNotRSASigner), got %v", err)
+		}
+		if errors.Is(err, ErrSignatureMismatch) {
+			t.Fatalf("unusable-key config error must not be conflated with ErrSignatureMismatch, got %v", err)
+		}
+	})
+
+	t.Run("access token", func(t *testing.T) {
+		v := &ServerVerifier{KeyStore: store, TimestampWindow: DisableTimestampFreshnessCheck}
+		req := validAccessTokenRequest()
+		err := v.VerifyAccessTokenRequest(req)
+		if !errors.Is(err, ErrNotRSASigner) {
+			t.Fatalf("want errors.Is(err, ErrNotRSASigner), got %v", err)
+		}
+		if errors.Is(err, ErrSignatureMismatch) {
+			t.Fatalf("unusable-key config error must not be conflated with ErrSignatureMismatch, got %v", err)
+		}
+	})
+}
+
 // TestServerVerifier_NilKeyStoreDoesNotPanic is the regression test for a
 // GAN evaluator finding: a zero-value ServerVerifier{} (no KeyStore set)
 // used to panic with a nil pointer dereference on the first lookup instead

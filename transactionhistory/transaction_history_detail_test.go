@@ -104,13 +104,13 @@ func TestTransactionHistoryDetailResponse_RoundTrips(t *testing.T) {
 		ResponseMessage:    "Request has been processed successfully",
 		ReferenceNo:        "2020102977770000000009",
 		PartnerReferenceNo: "2020102900000000000001",
-		Amount:             snap.Money{Value: "12345678.00", Currency: "IDR"},
+		Amount:             &snap.Money{Value: "12345678.00", Currency: "IDR"},
 		CancelledTime:      "2009-07-03T12:08:56+07:00",
 		DateTime:           "2009-07-03T12:08:56+07:00",
-		RefundAmount:       snap.Money{Value: "12345678.00", Currency: "IDR"},
+		RefundAmount:       &snap.Money{Value: "12345678.00", Currency: "IDR"},
 		Remark:             "Payment to Warung Ikan Bakar",
 		SourceOfFunds: []SourceOfFund{
-			{Source: "BALANCE", Amount: snap.Money{Value: "10000.00", Currency: "IDR"}},
+			{Source: "BALANCE", Amount: &snap.Money{Value: "10000.00", Currency: "IDR"}},
 		},
 		Status:         "SUCCESS",
 		Type:           "PAYMENT",
@@ -122,8 +122,10 @@ func TestTransactionHistoryDetailResponse_RoundTrips(t *testing.T) {
 }
 
 // TestTransactionHistoryDetailResponse_MandatoryFieldsHaveNoOmitempty pins
-// ResponseCode, ResponseMessage, Amount, DateTime, RefundAmount, Status,
-// and Type — the fields without omitempty — as always-serializing.
+// ResponseCode, ResponseMessage, DateTime, Status, and Type — the
+// fields without omitempty — as always-serializing. Amount and
+// RefundAmount are Optional (*snap.Money, omitempty) and must be
+// absent from a zero-value response, not present as empty objects.
 func TestTransactionHistoryDetailResponse_MandatoryFieldsHaveNoOmitempty(t *testing.T) {
 	b, err := json.Marshal(TransactionHistoryDetailResponse{})
 	if err != nil {
@@ -136,9 +138,7 @@ func TestTransactionHistoryDetailResponse_MandatoryFieldsHaveNoOmitempty(t *test
 	want := map[string]any{
 		"responseCode":    "",
 		"responseMessage": "",
-		"amount":          map[string]any{"value": "", "currency": ""},
 		"dateTime":        "",
-		"refundAmount":    map[string]any{"value": "", "currency": ""},
 		"status":          "",
 		"type":            "",
 	}
@@ -179,13 +179,13 @@ func TestTransactionHistoryDetail_ParsesResponse(t *testing.T) {
 		ResponseMessage:    "Request has been processed successfully",
 		ReferenceNo:        "2020102977770000000009",
 		PartnerReferenceNo: "2020102900000000000001",
-		Amount:             snap.Money{Value: "12345678.00", Currency: "IDR"},
+		Amount:             &snap.Money{Value: "12345678.00", Currency: "IDR"},
 		CancelledTime:      "2009-07-03T12:08:56+07:00",
 		DateTime:           "2009-07-03T12:08:56+07:00",
-		RefundAmount:       snap.Money{Value: "12345678.00", Currency: "IDR"},
+		RefundAmount:       &snap.Money{Value: "12345678.00", Currency: "IDR"},
 		Remark:             "Payment to Warung Ikan Bakar",
 		SourceOfFunds: []SourceOfFund{
-			{Source: "BALANCE", Amount: snap.Money{Value: "10000.00", Currency: "IDR"}},
+			{Source: "BALANCE", Amount: &snap.Money{Value: "10000.00", Currency: "IDR"}},
 		},
 		Status:         "SUCCESS",
 		Type:           "PAYMENT",

@@ -72,12 +72,12 @@ func TestBalanceInquiry_ParsesWorkedExampleResponse(t *testing.T) {
 		AccountInfos: []AccountInfo{
 			{
 				BalanceType:              "Cash",
-				Amount:                   snap.Money{Value: "200000.00", Currency: "IDR"},
-				FloatAmount:              snap.Money{Value: "50000.00", Currency: "IDR"},
-				HoldAmount:               snap.Money{Value: "20000.00", Currency: "IDR"},
-				AvailableBalance:         snap.Money{Value: "130000.00", Currency: "IDR"},
-				LedgerBalance:            snap.Money{Value: "30000.00", Currency: "IDR"},
-				CurrentMultilateralLimit: snap.Money{Value: "10000.00", Currency: "IDR"},
+				Amount:                   &snap.Money{Value: "200000.00", Currency: "IDR"},
+				FloatAmount:              &snap.Money{Value: "50000.00", Currency: "IDR"},
+				HoldAmount:               &snap.Money{Value: "20000.00", Currency: "IDR"},
+				AvailableBalance:         &snap.Money{Value: "130000.00", Currency: "IDR"},
+				LedgerBalance:            &snap.Money{Value: "30000.00", Currency: "IDR"},
+				CurrentMultilateralLimit: &snap.Money{Value: "10000.00", Currency: "IDR"},
 				RegistrationStatusCode:   "0001",
 				Status:                   "0001",
 				AdditionalInfo:           json.RawMessage(`{"note":"per-account"}`),

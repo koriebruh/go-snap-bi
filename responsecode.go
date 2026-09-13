@@ -35,21 +35,23 @@ var (
 // for any code not exactly 7 digits or containing non-digit characters.
 func ParseResponseCode(code string) (httpStatus int, serviceCode, caseCode string, err error) {
 	if len(code) != 7 {
-		return 0, "", "", fmt.Errorf("snap: parse response code %q: want 7 digits, got %d characters", truncateForError(code), len(code))
+		return 0, "", "", fmt.Errorf("snap: parse response code %q: want 7 digits, got %d characters", TruncateForError(code), len(code))
 	}
 	for _, r := range code {
 		if r < '0' || r > '9' {
-			return 0, "", "", fmt.Errorf("snap: parse response code %q: contains non-digit characters", truncateForError(code))
+			return 0, "", "", fmt.Errorf("snap: parse response code %q: contains non-digit characters", TruncateForError(code))
 		}
 	}
 	httpStatus = int(code[0]-'0')*100 + int(code[1]-'0')*10 + int(code[2]-'0')
 	return httpStatus, code[3:5], code[5:7], nil
 }
 
-// truncateForError caps an untrusted string before it's interpolated into an
+// TruncateForError caps an untrusted string before it's interpolated into an
 // error message, so a pathologically large input can't produce a
-// proportionally large (and typically logged) error string.
-func truncateForError(s string) string {
+// proportionally large (and typically logged) error string. Exported so
+// the domain subpackages' own untrusted-input error paths (e.g.
+// registration.CardRegistrationInquiry's custIdMerchant) can use it too.
+func TruncateForError(s string) string {
 	const max = 16
 	if len(s) <= max {
 		return s

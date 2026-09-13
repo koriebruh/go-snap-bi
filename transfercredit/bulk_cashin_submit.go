@@ -48,8 +48,10 @@ type SubmitBulkCashInResponse struct {
 }
 
 // SubmitBulkCashIn calls the SNAP Submit Bulk Cash In endpoint
-// (Service Code 40, path .../{version}/submit-bulk-cash-in, HTTP POST
-// — no method override). hb must already carry every field
+// (Service Code 40, path .../{version}/emoney/bulk-cashin-payment —
+// the path was previously misstated here as submit-bulk-cash-in with
+// no recorded justification, corrected against research §1's own path
+// table, HTTP POST — no method override). hb must already carry every field
 // snap.HeaderBuilder needs except Body, which SubmitBulkCashIn sets itself
 // so the exact marshaled bytes are used for both signing and the wire
 // body.
