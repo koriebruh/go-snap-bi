@@ -11,6 +11,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment:
+      name: pkg.go.dev
+      url: https://pkg.go.dev/github.com/koriebruh/go-snap-bi@${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
