@@ -11,8 +11,13 @@ import (
 
 // CardRegistrationRequest is the request body for API Card Registration
 // (Service Code 01, path .../{version}/registration-card-bind).
-// BankCardNo and CustIDMerchant are the two mandatory fields per the
-// Guides tab.
+// BankCardNo, CardData, and CustIDMerchant are the three mandatory
+// fields per the Guides tab — CardData's own Mandatory marker was
+// missed by an earlier version of this type (its doc comment listed
+// only BankCardNo/CustIDMerchant, and the Go tag carried an omitempty
+// that dropped a caller's CardData entirely if left unset); corrected
+// against a direct portal re-verification recorded in
+// docs/research/2026-09-13-registrasi-informasi-saldo-riwayat-transaksi-portal-research.md.
 //
 // CardData and Limit are typed json.RawMessage: the Guides tab labels
 // CardData "Encrypted Object" and Limit "decimal", each permitting a
@@ -41,7 +46,7 @@ import (
 type CardRegistrationRequest struct {
 	PartnerReferenceNo string          `json:"partnerReferenceNo,omitempty"`
 	AccountName        string          `json:"accountName,omitempty"`
-	CardData           json.RawMessage `json:"cardData,omitempty"`
+	CardData           json.RawMessage `json:"cardData"`
 	BankAccountNo      string          `json:"bankAccountNo,omitempty"`
 	BankCardNo         string          `json:"bankCardNo"`
 	BankCardType       string          `json:"bankCardType,omitempty"`

@@ -9,17 +9,23 @@ import (
 	snap "github.com/koriebruh/go-snap-bi"
 )
 
-// AccountInfo is one entry in a BalanceInquiryResponse's accountInfos array.
+// AccountInfo is one entry in a BalanceInquiryResponse's accountInfos
+// array. Every field here is Optional per the Guides tab, including
+// each of the six Money-family containers (only their own value/currency
+// members are Mandatory) — corrected from an earlier version of this
+// type that had all nine fields (wrongly) modeled as always-present,
+// against a direct portal re-verification recorded in
+// docs/research/2026-09-13-registrasi-informasi-saldo-riwayat-transaksi-portal-research.md.
 type AccountInfo struct {
-	BalanceType              string          `json:"balanceType"`
-	Amount                   snap.Money      `json:"amount"`
-	FloatAmount              snap.Money      `json:"floatAmount"`
-	HoldAmount               snap.Money      `json:"holdAmount"`
-	AvailableBalance         snap.Money      `json:"availableBalance"`
-	LedgerBalance            snap.Money      `json:"ledgerBalance"`
-	CurrentMultilateralLimit snap.Money      `json:"currentMultilateralLimit"`
-	RegistrationStatusCode   string          `json:"registrationStatusCode"`
-	Status                   string          `json:"status"`
+	BalanceType              string          `json:"balanceType,omitempty"`
+	Amount                   *snap.Money     `json:"amount,omitempty"`
+	FloatAmount              *snap.Money     `json:"floatAmount,omitempty"`
+	HoldAmount               *snap.Money     `json:"holdAmount,omitempty"`
+	AvailableBalance         *snap.Money     `json:"availableBalance,omitempty"`
+	LedgerBalance            *snap.Money     `json:"ledgerBalance,omitempty"`
+	CurrentMultilateralLimit *snap.Money     `json:"currentMultilateralLimit,omitempty"`
+	RegistrationStatusCode   string          `json:"registrationStatusCode,omitempty"`
+	Status                   string          `json:"status,omitempty"`
 	AdditionalInfo           json.RawMessage `json:"additionalInfo,omitempty"`
 }
 

@@ -17,10 +17,18 @@ type SourceOfFund struct {
 }
 
 // TransactionDetail is one entry in a TransactionHistoryListResponse's
-// detailData array.
+// detailData array. Amount's container is Optional per the Guides tab
+// (only its own value/currency members are Mandatory) — corrected from
+// an earlier version of this type that modeled it as an always-present
+// plain snap.Money, against a direct portal re-verification recorded in
+// docs/research/2026-09-13-registrasi-informasi-saldo-riwayat-transaksi-portal-research.md.
+// This differs from the otherwise-similar-looking Transaction History
+// Detail (Service Code 13) endpoint, where research marks the
+// equivalent amount container Mandatory — recorded per-occurrence, not
+// harmonized.
 type TransactionDetail struct {
 	DateTime       string          `json:"dateTime,omitempty"`
-	Amount         snap.Money      `json:"amount"`
+	Amount         *snap.Money     `json:"amount,omitempty"`
 	Remark         string          `json:"remark,omitempty"`
 	SourceOfFunds  []SourceOfFund  `json:"sourceOfFunds,omitempty"`
 	Status         string          `json:"status"`
