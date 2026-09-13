@@ -9,6 +9,8 @@ covering every API Service category published on the
 go get github.com/koriebruh/go-snap-bi
 ```
 
+<img src="./docs/Mascot.jpg" alt="go-snap-bi mascot" width="240">
+
 ## Status
 
 All 7 of the portal's API Service categories are accounted for — **79
@@ -127,7 +129,6 @@ tree, so a `go get` of this module or a shallow clone won't have them.
 
 ## License
 
-Not yet licensed — a `LICENSE` file has not been added to this
-repository yet. Until one is added, no license is granted for use,
-copying, or redistribution beyond what's permitted by default copyright
-law.
+Copyright © 2026 JamalKya Nanami.
+
+Licensed under the [Apache License, Version 2.0](./LICENSE).
