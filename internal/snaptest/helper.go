@@ -1,7 +1,8 @@
 // Package snaptest provides shared test-only helpers for go-snap-bi's
-// transferkredit and transferdebit subpackages. It lives under internal/
-// so it is importable anywhere in this module but not part of the
-// public API surface.
+// registration, balanceinfo, transactionhistory, transfercredit, and
+// transferdebit subpackages. It lives under internal/ so it is
+// importable anywhere in this module but not part of the public API
+// surface.
 package snaptest
 
 import (
@@ -18,8 +19,8 @@ import (
 // handlers assert anything about the request path.
 //
 // Moved here from the single per-package copy each endpoint test file
-// used to declare, so transferkredit and transferdebit share one
-// definition instead of duplicating it.
+// used to declare, so every subpackage shares one definition instead
+// of duplicating it.
 func TestHeaderBuilder(serverURL string) snap.HeaderBuilder {
 	return snap.HeaderBuilder{
 		Method:       http.MethodPost,

@@ -115,7 +115,8 @@ func TestInquiryVA_ParsesResponse(t *testing.T) {
 // issuer sends. A plain string field would hard-fail the entire decode
 // (discarding the VA identity, all other bills, etc.) for an unquoted
 // numeric value. json.RawMessage tolerates either shape — same fix,
-// same reasoning, as AccountBindingInquiryResponse.AccountTransactionLimit.
+// same reasoning, as registration.AccountBindingInquiryResponse's
+// AccountTransactionLimit field.
 func TestInquiryVA_BillReferenceNoAcceptsEitherWireShape(t *testing.T) {
 	tests := []struct {
 		name string
