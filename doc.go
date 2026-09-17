@@ -8,10 +8,9 @@
 // quirk hooks (HeaderBuilder), response-code parsing and the
 // authoritative status check (ParseResponseCode, CheckResponseStatus,
 // the Err* sentinels), the request/response transport (Transport,
-// Envelope), and the shared Money amount type — see
-// docs/superpowers/specs/2026-09-10-go-snap-bi-core-design.md (a
-// development note kept locally only, not part of this module's
-// published tree — every docs/ reference in this file is the same).
+// Envelope), and the shared Money amount type — see the project
+// documentation at https://snap-bi.jamalkya.lol/docs/introduction/ for a
+// walkthrough of these core concepts.
 //
 // # Package layout
 //
@@ -33,16 +32,13 @@
 //     Transaksi (Service Codes 12-14): TransactionHistoryList,
 //     TransactionHistoryDetail, BankStatement.
 //   - github.com/koriebruh/go-snap-bi/transfercredit — Transfer Kredit
-//     (Service Codes 15-53, 75-78, 43 endpoints — see
-//     docs/research/2026-09-11-transfer-kredit-portal-research.md for
-//     the full inventory): Account Inquiry, Trigger Transfer, Virtual
-//     Account, Transaction Status Inquiry (Bank), Customer Top Up, Bulk
-//     Cash In, Transfer to Bank, Transfer to OTC, MPM/QR, Transaction
-//     Status Inquiry (non-bank).
+//     (Service Codes 15-53, 75-78, 43 endpoints): Account Inquiry,
+//     Trigger Transfer, Virtual Account, Transaction Status Inquiry
+//     (Bank), Customer Top Up, Bulk Cash In, Transfer to Bank, Transfer
+//     to OTC, MPM/QR, Transaction Status Inquiry (non-bank).
 //   - github.com/koriebruh/go-snap-bi/transferdebit — Transfer Debit
-//     (Service Codes 54-72, 79-80, 21 endpoints — see
-//     docs/research/2026-09-12-transfer-debit-portal-research.md):
-//     Direct Debit, CPM, Direct Debit BI-FAST, Auth Payment.
+//     (Service Codes 54-72, 79-80, 21 endpoints): Direct Debit, CPM,
+//     Direct Debit BI-FAST, Auth Payment.
 //
 // The portal's remaining two categories don't get their own subpackage:
 //
@@ -82,10 +78,8 @@
 // Transfer Debit are fully implemented (79 endpoints total across the
 // five); Keamanan's transactional endpoints live in this package's own
 // token.go, as described above; Administrasi has no endpoints to
-// implement. See docs/research/2026-09-11-transfer-kredit-portal-research.md
-// and docs/research/2026-09-12-transfer-debit-portal-research.md for
-// the Transfer Kredit and Transfer Debit endpoint inventories
-// specifically, and CHANGELOG.md for the phase-by-phase history of how
-// this package was built — both kept locally only (gitignored), not
-// part of this module's published tree.
+// implement. See CONFORMANCE.md and SPEC_COVERAGE.md for the
+// endpoint-by-endpoint traceability against the specification, and
+// the project documentation at https://snap-bi.jamalkya.lol/docs/introduction/
+// for a full reference per package.
 package snap

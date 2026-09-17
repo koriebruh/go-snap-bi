@@ -5,10 +5,9 @@
 // Transfer to Bank, Transfer to OTC, and MPM/QR. See the parent
 // github.com/koriebruh/go-snap-bi package's doc comment for the shared
 // core types (HeaderBuilder, Transport, Money, the Err* sentinels)
-// every calling function here depends on, and
-// docs/research/2026-09-11-transfer-kredit-portal-research.md for the
-// full endpoint field-table inventory this package is implemented
-// against.
+// every calling function here depends on, and SPEC_COVERAGE.md at the
+// module root for the full endpoint traceability this package is
+// implemented against.
 //
 // # Known limitation: bare-number responseCode on two VA endpoints
 //

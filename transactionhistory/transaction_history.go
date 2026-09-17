@@ -25,12 +25,12 @@ type SourceOfFund struct {
 // detailData array. Amount's container is Optional per the Guides tab
 // (only its own value/currency members are Mandatory) — corrected from
 // an earlier version of this type that modeled it as an always-present
-// plain snap.Money, against a direct portal re-verification recorded in
-// docs/research/2026-09-13-registrasi-informasi-saldo-riwayat-transaksi-portal-research.md.
-// This differs from the otherwise-similar-looking Transaction History
-// Detail (Service Code 13) endpoint, where research marks the
-// equivalent amount container Mandatory — recorded per-occurrence, not
-// harmonized.
+// plain snap.Money, against a direct portal re-verification (see
+// SPEC_COVERAGE.md at the module root for this endpoint's traceability
+// entry). The otherwise-similar-looking Transaction History Detail
+// (Service Code 13) endpoint's equivalent Amount/RefundAmount are also
+// Optional containers, modeled the same way — the two endpoints are
+// consistent, not intentionally divergent.
 type TransactionDetail struct {
 	DateTime       string          `json:"dateTime,omitempty"`
 	Amount         *snap.Money     `json:"amount,omitempty"`
