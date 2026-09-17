@@ -52,7 +52,14 @@ endpoint.
 
 See [`doc.go`](./doc.go) (`go doc github.com/koriebruh/go-snap-bi`) for
 the full package-layout writeup, including where to add a new endpoint
-when the portal changes.
+when the portal changes, and the
+[documentation site](https://snap-bi.jamalkya.lol/) for a
+full walkthrough (bilingual, English/Bahasa Indonesia).
+
+For evidence that this coverage claim actually holds up, see
+[CONFORMANCE.md](./CONFORMANCE.md) (test coverage summary per
+category) and [SPEC_COVERAGE.md](./SPEC_COVERAGE.md) (per-endpoint
+traceability: Service Code → Go function → tests).
 
 ## Design
 
@@ -135,7 +142,9 @@ trusting its body.
 Endpoint bindings follow the conventions documented in `doc.go`. Run
 `lefthook install` after cloning for local pre-commit/pre-push checks
 (`gofmt`, `go vet`, `go test -race`); CI runs the same checks plus
-`golangci-lint`, `govulncheck`, and `gosec` on every push and PR.
+`golangci-lint`, `govulncheck`, and `gosec` on every push and PR — see
+[SECURITY.md](./SECURITY.md) for the security policy and how to report
+a vulnerability.
 
 ## Author
 

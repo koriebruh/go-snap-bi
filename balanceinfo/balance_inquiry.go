@@ -14,8 +14,8 @@ import (
 // each of the six Money-family containers (only their own value/currency
 // members are Mandatory) — corrected from an earlier version of this
 // type that had all nine fields (wrongly) modeled as always-present,
-// against a direct portal re-verification recorded in
-// docs/research/2026-09-13-registrasi-informasi-saldo-riwayat-transaksi-portal-research.md.
+// against a direct portal re-verification (see SPEC_COVERAGE.md at
+// the module root for this endpoint's traceability entry).
 type AccountInfo struct {
 	BalanceType              string          `json:"balanceType,omitempty"`
 	Amount                   *snap.Money     `json:"amount,omitempty"`
