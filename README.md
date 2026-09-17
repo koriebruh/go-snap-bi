@@ -1,17 +1,33 @@
-# go-snap-bi
+<p align="center">
+  <img src="./docs/GO-SNAP.png" alt="go-snap-bi logo" width="140" style="display:block;margin:0 auto">
+</p>
 
-[![CI](https://github.com/koriebruh/go-snap-bi/actions/workflows/ci.yml/badge.svg)](https://github.com/koriebruh/go-snap-bi/actions/workflows/ci.yml)
+<h1 align="center">go-snap-bi</h1>
 
-A Go implementation of Bank Indonesia's **SNAP** (Standar Nasional Open API
-Pembayaran) payment standard, document version **1.0.2** (September 2024),
-covering every API Service category published on the
-[ASPI SNAP Developer Site](https://apidevportal.aspi-indonesia.or.id/api-services).
+<p align="center">
+  <a href="https://github.com/koriebruh/go-snap-bi/actions/workflows/ci.yml"><img src="https://github.com/koriebruh/go-snap-bi/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pkg.go.dev/github.com/koriebruh/go-snap-bi"><img src="https://pkg.go.dev/badge/github.com/koriebruh/go-snap-bi.svg" alt="Go Reference"></a>
+  <a href="https://goreportcard.com/report/github.com/koriebruh/go-snap-bi"><img src="https://goreportcard.com/badge/github.com/koriebruh/go-snap-bi" alt="Go Report Card"></a>
+  <a href="https://github.com/koriebruh/go-snap-bi/releases"><img src="https://img.shields.io/github/v/tag/koriebruh/go-snap-bi?label=release" alt="Release"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/koriebruh/go-snap-bi" alt="License"></a>
+  <img src="https://img.shields.io/github/go-mod/go-version/koriebruh/go-snap-bi" alt="Go version">
+  <img src="https://img.shields.io/badge/SNAP-v1.0.2-145B91" alt="SNAP standard version">
+</p>
+
+<p align="center">
+  A Go implementation of Bank Indonesia's <b>SNAP</b> (Standar Nasional Open API
+  Pembayaran) payment standard, document version <b>1.0.2</b> (September 2024),
+  covering every API Service category published on the
+  <a href="https://apidevportal.aspi-indonesia.or.id/api-services">ASPI SNAP Developer Site</a>.
+</p>
+
+<p align="center">
+  📚 <a href="https://snap-bi.jamalkya.lol/">Full documentation</a>
+</p>
 
 ```
 go get github.com/koriebruh/go-snap-bi
 ```
-
-<img src="./docs/Mascot.jpg" alt="go-snap-bi mascot">
 
 ## Status
 
