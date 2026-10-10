@@ -1,6 +1,7 @@
 package snap
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/hmac"
 	"crypto/rand"
@@ -8,7 +9,9 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -30,6 +33,8 @@ var (
 var (
 	ErrNotRSASigner = errors.New("snap: not an RSA signer")
 	ErrWeakRSAKey   = errors.New("snap: RSA key smaller than minimum size")
+	// ErrSignatureEncoding: the signature is neither Base64 nor hex of the expected size.
+	ErrSignatureEncoding = errors.New("snap: signature is not Base64 (or hex) of the expected size")
 )
 
 // minRSAKeyBits is the minimum RSA modulus size accepted for SHA256withRSA
@@ -40,11 +45,29 @@ var (
 const minRSAKeyBits = 2048
 
 // SignSymmetric computes the HMAC-SHA512 signature of stringToSign using
-// clientSecret as the key, returning lowercase hex-encoded output.
+// clientSecret as the key, returning standard Base64 (the encoding SNAP
+// participants use for X-SIGNATURE).
 func SignSymmetric(clientSecret, stringToSign string) string {
+	return base64.StdEncoding.EncodeToString(hmacSHA512(clientSecret, stringToSign))
+}
+
+func hmacSHA512(clientSecret, stringToSign string) []byte {
 	mac := hmac.New(sha512.New, []byte(clientSecret))
 	mac.Write([]byte(stringToSign))
-	return hex.EncodeToString(mac.Sum(nil))
+	return mac.Sum(nil)
+}
+
+// decodeSignature decodes an X-SIGNATURE of size bytes: standard Base64, or
+// hex as produced by v0.1.x of this package. The two cannot be confused
+// because their lengths for the same size differ.
+func decodeSignature(signature string, size int) ([]byte, error) {
+	if b, err := base64.StdEncoding.DecodeString(signature); err == nil && len(b) == size {
+		return b, nil
+	}
+	if b, err := hex.DecodeString(signature); err == nil && len(b) == size {
+		return b, nil
+	}
+	return nil, ErrSignatureEncoding
 }
 
 // VerifySymmetric reports whether signature is the valid HMAC-SHA512
@@ -58,21 +81,15 @@ func VerifySymmetric(clientSecret, stringToSign, signature string) bool {
 		// empty string," so this is rejected before ever reaching hmac.Equal.
 		return false
 	}
-	expected := SignSymmetric(clientSecret, stringToSign)
-	expectedBytes, err := hex.DecodeString(expected)
-	if err != nil {
-		// SignSymmetric always produces valid hex; unreachable in practice.
-		return false
-	}
-	gotBytes, err := hex.DecodeString(signature)
+	got, err := decodeSignature(signature, sha512.Size)
 	if err != nil {
 		return false
 	}
-	return hmac.Equal(expectedBytes, gotBytes)
+	return hmac.Equal(hmacSHA512(clientSecret, stringToSign), got)
 }
 
 // SignAsymmetric signs stringToSign with SHA256withRSA (PKCS#1 v1.5) using
-// signer, returning lowercase hex-encoded output. signer is a crypto.Signer
+// signer, returning standard Base64. signer is a crypto.Signer
 // rather than a concrete *rsa.PrivateKey so that HSM/KMS-backed keys can be
 // plugged in without an API change.
 func SignAsymmetric(signer crypto.Signer, stringToSign string) (string, error) {
@@ -91,13 +108,13 @@ func SignAsymmetric(signer crypto.Signer, stringToSign string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("snap: sign asymmetric: %w", err)
 	}
-	return hex.EncodeToString(sig), nil
+	return base64.StdEncoding.EncodeToString(sig), nil
 }
 
-// VerifyAsymmetric verifies a hex-encoded SHA256withRSA signature of
-// stringToSign against pub, which must be an *rsa.PublicKey. It returns a
-// non-nil error if pub is not an RSA key, signature is not valid hex, or the
-// signature does not verify.
+// VerifyAsymmetric verifies a SHA256withRSA signature of stringToSign
+// (standard Base64, or hex from v0.1.x) against pub, which must be an
+// *rsa.PublicKey. It returns a non-nil error if pub is not an RSA key, the
+// signature is not decodable, or it does not verify.
 func VerifyAsymmetric(pub crypto.PublicKey, stringToSign, signature string) error {
 	rsaPub, ok := pub.(*rsa.PublicKey)
 	if !ok || rsaPub == nil || rsaPub.N == nil {
@@ -106,9 +123,9 @@ func VerifyAsymmetric(pub crypto.PublicKey, stringToSign, signature string) erro
 	if rsaPub.N.BitLen() < minRSAKeyBits {
 		return fmt.Errorf("snap: verify asymmetric: %w", ErrWeakRSAKey)
 	}
-	sig, err := hex.DecodeString(signature)
+	sig, err := decodeSignature(signature, rsaPub.Size())
 	if err != nil {
-		return fmt.Errorf("snap: verify asymmetric: decode signature: %w", err)
+		return fmt.Errorf("snap: verify asymmetric: %w", err)
 	}
 	digest := sha256.Sum256([]byte(stringToSign))
 	if err := rsa.VerifyPKCS1v15(rsaPub, crypto.SHA256, digest[:], sig); err != nil {
@@ -124,14 +141,15 @@ func BuildStringToSignAccessToken(clientID, timestamp string) string {
 }
 
 // BuildStringToSignTransaction builds the stringToSign for a SNAP
-// transaction request. body must be the exact bytes already sent on the
-// wire (this function does not marshal JSON); an empty body hashes to the
-// SHA256 digest of an empty byte slice.
+// transaction request from the bytes sent on the wire. The body is minified
+// first, as the standard requires (Lowercase(HexEncode(SHA-256(minify(RequestBody))))),
+// so whitespace outside JSON strings does not change the signature; a body
+// that is not JSON is hashed as is, and an empty body hashes the empty string.
 //
-// symmetric formula:  HTTPMethod:EndpointUrl:AccessToken:HexSHA256(body):TimeStamp
-// asymmetric formula: HTTPMethod:EndpointUrl:HexSHA256(body):TimeStamp
+// symmetric formula:  HTTPMethod:EndpointUrl:AccessToken:HexSHA256(minify(body)):TimeStamp
+// asymmetric formula: HTTPMethod:EndpointUrl:HexSHA256(minify(body)):TimeStamp
 func BuildStringToSignTransaction(method, endpointURL, accessToken string, body []byte, timestamp string, symmetric bool) string {
-	bodyHash := sha256.Sum256(body)
+	bodyHash := sha256.Sum256(minify(body))
 	bodyHashHex := hex.EncodeToString(bodyHash[:])
 	if symmetric {
 		return method + ":" + endpointURL + ":" + accessToken + ":" + bodyHashHex + ":" + timestamp
@@ -159,4 +177,13 @@ func ParseRSAPrivateKeyPEM(pemBytes []byte) (crypto.Signer, error) {
 		return nil, fmt.Errorf("snap: parse rsa private key: %w", ErrNotRSAKey)
 	}
 	return rsaKey, nil
+}
+
+// minify removes insignificant whitespace from a JSON body (json.Compact).
+func minify(body []byte) []byte {
+	var b bytes.Buffer
+	if err := json.Compact(&b, body); err != nil {
+		return body
+	}
+	return b.Bytes()
 }

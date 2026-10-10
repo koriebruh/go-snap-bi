@@ -64,6 +64,15 @@ test at all; it is covered by round-trip and property tests (sign then
 verify, determinism, key-strength floor, hostile-input handling), not
 validated against an external reference value.
 
+Signature encoding and body hashing: the BI technical standard requires
+`Lowercase(HexEncode(SHA-256(minify(RequestBody))))` in the transaction
+stringToSign but does not name the encoding of the signature itself. This
+package minifies the body (`json.Compact`; a non-JSON body is hashed as
+is) and emits standard Base64 for both `SHA256withRSA` and `HMAC_SHA512`,
+the encoding used by SNAP participants (BRI, DANA, DOKU, Bank Neo,
+Paydia). Verification also accepts the lowercase/uppercase hex emitted by
+v0.1.x; the two encodings cannot be confused because their lengths differ.
+
 ## What this does NOT cover
 
 - **Live-endpoint / sandbox testing.** Tests validate this project's
