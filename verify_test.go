@@ -112,7 +112,7 @@ func TestServerVerifier_VerifyAccessTokenRequest_RoundTrip(t *testing.T) {
 	}{
 		{"valid", func(r IncomingRequest) IncomingRequest { return r }, false, false},
 		{"tampered signature", func(r IncomingRequest) IncomingRequest {
-			r.Signature = tamperHex(r.Signature)
+			r.Signature = tamperSig(r.Signature)
 			return r
 		}, true, true},
 		{"tampered timestamp", func(r IncomingRequest) IncomingRequest {
@@ -161,7 +161,7 @@ func TestServerVerifier_VerifyTransactionRequest_RoundTrip(t *testing.T) {
 			}{
 				{"valid", func(r IncomingRequest) IncomingRequest { return r }, false, false},
 				{"tampered signature", func(r IncomingRequest) IncomingRequest {
-					r.Signature = tamperHex(r.Signature)
+					r.Signature = tamperSig(r.Signature)
 					return r
 				}, true, true},
 				{"tampered body", func(r IncomingRequest) IncomingRequest {

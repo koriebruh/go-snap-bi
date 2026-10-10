@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
@@ -21,17 +22,25 @@ import (
 // tautologically agree with itself.
 const sha256HexOfEmptyBody = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-// tamperHex flips the last hex character of a signature to a value
-// guaranteed different from the original, so tamper tests can't
-// accidentally no-op (e.g. sig[:len(sig)-1]+"0" is a no-op whenever the
-// original last character already was "0").
-func tamperHex(sig string) string {
-	last := sig[len(sig)-1]
-	replacement := byte('0')
-	if last == '0' {
-		replacement = '1'
+// tamperSig flips one bit of a Base64 signature's decoded bytes and
+// re-encodes it, so the result still decodes (the tamper is caught by the
+// cryptographic check, not by a decoding error) and never equals the original.
+func tamperSig(sig string) string {
+	b, err := base64.StdEncoding.DecodeString(sig)
+	if err != nil {
+		panic(err)
 	}
-	return sig[:len(sig)-1] + string(replacement)
+	b[0] ^= 0x01
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// legacyHex re-encodes a Base64 signature as lowercase hex, the v0.1.x format.
+func legacyHex(sig string) string {
+	b, err := base64.StdEncoding.DecodeString(sig)
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b)
 }
 
 var testRSAKeys = sync.OnceValue(func() [2]*rsa.PrivateKey {
@@ -60,11 +69,13 @@ func TestSignVerifySymmetric(t *testing.T) {
 		want         bool
 	}{
 		{"correct signature verifies", secret, stringToSign, sig, true},
-		{"tampered signature fails", secret, stringToSign, tamperHex(sig), false},
+		{"tampered signature fails", secret, stringToSign, tamperSig(sig), false},
 		{"tampered stringToSign fails", secret, stringToSign + "x", sig, false},
 		{"wrong secret fails", "other-secret", stringToSign, sig, false},
-		{"uppercase-hex signature still verifies", secret, stringToSign, strings.ToUpper(sig), true},
-		{"non-hex signature fails closed, not panics", secret, stringToSign, "not-hex!!", false},
+		{"v0.1.x hex signature still verifies", secret, stringToSign, legacyHex(sig), true},
+		{"uppercase-hex signature still verifies", secret, stringToSign, strings.ToUpper(legacyHex(sig)), true},
+		{"truncated signature fails", secret, stringToSign, sig[:40], false},
+		{"undecodable signature fails closed, not panics", secret, stringToSign, "not-a-signature!!", false},
 		{
 			"empty clientSecret rejected, not treated as a valid HMAC key",
 			"", stringToSign, SignSymmetric("", stringToSign), false,
@@ -84,30 +95,28 @@ func TestSignVerifySymmetric(t *testing.T) {
 // value computed independently (Python stdlib hmac+hashlib), not by
 // round-tripping through this package's own functions — a round-trip-only
 // test can't detect a paired algorithm substitution (e.g. accidentally
-// switching to SHA-384 or base64 output) since it would still agree with
+// switching to SHA-384 or hex output) since it would still agree with
 // itself.
 func TestSignSymmetricKnownAnswer(t *testing.T) {
 	const secret = "s3cr3t"
 	const stringToSign = "POST:/v1.0/access-token/b2b:2026-09-10T10:00:00.000+07:00"
-	const wantHex = "40092593b7c6e6e5bf4a09ef346d831089fe3bb46efcdff1a91545e0f01eb064c5b2745b93b157389c39c64a8436c2e8bc07b0d9de723fb76c39c4b8c6c436ff"
+	const want = "QAklk7fG5uW/SgnvNG2DEIn+O7Ru/N/xqRVF4PAesGTFsnRbk7FXOJw5xkqENsLovAew2d5yP7dsOcS4xsQ2/w=="
 
 	got := SignSymmetric(secret, stringToSign)
-	if got != wantHex {
-		t.Errorf("SignSymmetric() = %q, want independently-computed %q", got, wantHex)
+	if got != want {
+		t.Errorf("SignSymmetric() = %q, want independently-computed %q", got, want)
 	}
 }
 
-func TestSignAsymmetricProducesLowercaseHex(t *testing.T) {
+func TestSignAsymmetricProducesBase64(t *testing.T) {
 	key := testRSAKeys()[0]
 	sig, err := SignAsymmetric(key, "some string to sign")
 	if err != nil {
 		t.Fatalf("SignAsymmetric() error = %v", err)
 	}
-	if sig != strings.ToLower(sig) {
-		t.Errorf("SignAsymmetric() output not lowercase: %q", sig)
-	}
-	if _, err := hex.DecodeString(sig); err != nil {
-		t.Errorf("SignAsymmetric() output not valid hex: %v", err)
+	b, err := base64.StdEncoding.DecodeString(sig)
+	if err != nil || len(b) != key.Size() {
+		t.Errorf("SignAsymmetric() output is not standard Base64 of %d bytes: %q %v", key.Size(), sig, err)
 	}
 }
 
@@ -129,10 +138,11 @@ func TestSignVerifyAsymmetric(t *testing.T) {
 		wantErr      bool
 	}{
 		{"correct signature verifies", &key.PublicKey, stringToSign, sig, false},
-		{"tampered signature fails", &key.PublicKey, stringToSign, tamperHex(sig), true},
+		{"tampered signature fails", &key.PublicKey, stringToSign, tamperSig(sig), true},
+		{"v0.1.x hex signature still verifies", &key.PublicKey, stringToSign, legacyHex(sig), false},
 		{"tampered stringToSign fails", &key.PublicKey, stringToSign + "x", sig, true},
 		{"wrong key fails", &otherKey.PublicKey, stringToSign, sig, true},
-		{"non-hex signature fails", &key.PublicKey, stringToSign, "not-hex!!", true},
+		{"undecodable signature fails", &key.PublicKey, stringToSign, "not-a-signature!!", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -274,6 +284,27 @@ func TestBuildStringToSignTransaction(t *testing.T) {
 	}
 	if strings.Contains(asymmetricStr, accessToken) {
 		t.Errorf("asymmetric stringToSign must not contain AccessToken, got %q", asymmetricStr)
+	}
+}
+
+// TestBuildStringToSignTransactionMinifiesBody: the standard hashes
+// minify(RequestBody), so a pretty-printed body signs like its compact form
+// (whitespace inside strings is kept). The hash is computed independently
+// (Python hashlib over the compact bytes).
+func TestBuildStringToSignTransactionMinifiesBody(t *testing.T) {
+	const compactHash = "31505dec19d6ac9caadcfd51fb5831dc172cc6f924b70f28442e09f97537fac4"
+	pretty := []byte("{\n  \"amount\": \"10000.00\",\n\t\"note\" : \"a b\"\n}\n")
+	compact := []byte(`{"amount":"10000.00","note":"a b"}`)
+	want := "POST:/v1.0/transfer-interbank:token:" + compactHash + ":2026-09-10T10:00:00.000+07:00"
+	for name, body := range map[string][]byte{"pretty": pretty, "compact": compact} {
+		if got := BuildStringToSignTransaction("POST", "/v1.0/transfer-interbank", "token", body, "2026-09-10T10:00:00.000+07:00", true); got != want {
+			t.Errorf("%s body: %q, want %q", name, got, want)
+		}
+	}
+	notJSON := []byte("a=1 b=2")
+	h := sha256.Sum256(notJSON)
+	if got := BuildStringToSignTransaction("POST", "/x", "", notJSON, "ts", false); got != "POST:/x:"+hex.EncodeToString(h[:])+":ts" {
+		t.Errorf("a non-JSON body is hashed as is: %q", got)
 	}
 }
 
